@@ -8,6 +8,7 @@ import CreatePermitPage from '@/features/permits/CreatePermitPage';
 import PermitDetailPage from '@/features/permits/PermitDetailPage';
 import PermitListPage from '@/features/permits/PermitListPage';
 import LiftingPlanFormPage from '@/features/lifting/LiftingPlanFormPage';
+import LiftingPlanDetailPage from '@/features/lifting/LiftingPlanDetailPage';
 import CraneChecklistPage from '@/features/lifting/CraneChecklistPage';
 import SitePreparationPage from '@/features/lifting/SitePreparationPage';
 import RiggingVerificationPage from '@/features/lifting/RiggingVerificationPage';
@@ -54,7 +55,7 @@ export default function App() {
                 <PermitListPage title="Pending Approvals" statuses={['submitted', 'under_review']} />
               } />
               <Route path="lifting/plans/new" element={<LiftingPlanFormPage />} />
-              <Route path="lifting/plans/:id" element={<Placeholder title="View Lifting Plan (read-only view — coming shortly)" />} />
+              <Route path="lifting/plans/:id" element={<LiftingPlanDetailPage />} />
               <Route path="lifting/crane-checklist" element={<CraneChecklistPage />} />
               <Route path="lifting/site-preparation" element={<SitePreparationPage />} />
               <Route path="lifting/rigging" element={<RiggingVerificationPage />} />
