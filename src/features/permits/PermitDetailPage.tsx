@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { fetchLatestFieldVerification } from '@/features/lifting/liftingService';
 import { format } from 'date-fns';
 import { useAuth } from '@/features/auth/AuthContext';
 import StatusBadge from '@/components/StatusBadge';
@@ -18,6 +19,7 @@ export default function PermitDetailPage() {
   const [permit, setPermit] = useState<Permit | null>(null);
   const [controls, setControls] = useState<ControlRow[]>([]);
   const [approvals, setApprovals] = useState<ApprovalRow[]>([]);
+  const [fieldVerification, setFieldVerification] = useState<{ ready_to_lift: boolean } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
@@ -32,6 +34,9 @@ export default function PermitDetailPage() {
       setPermit(p);
       setControls(c as ControlRow[]);
       setApprovals(a as unknown as ApprovalRow[]);
+      if (p.permit_type === 'lifting') {
+        fetchLatestFieldVerification(id).then(setFieldVerification).catch(() => {});
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load permit.');
     } finally {
@@ -121,6 +126,29 @@ export default function PermitDetailPage() {
           </label>
         ))}
       </div>
+
+      {/* Lifting Package (Stage 3) */}
+      {permit.permit_type === 'lifting' && (
+        <div className="bg-white rounded-xl shadow-sm p-4 space-y-2">
+          <h2 className="text-sm font-semibold text-slate-700 mb-1">Lifting Package</h2>
+          <div className="grid grid-cols-2 gap-2">
+            <Link to={permit.lifting_plan_id ? `/lifting/plans/${permit.lifting_plan_id}` : `/lifting/plans/new?permitId=${permit.id}`}
+              className="text-center text-sm bg-slate-50 hover:bg-slate-100 rounded-lg py-3 font-medium text-slate-700">
+              {permit.lifting_plan_id ? 'View Lifting Plan' : '+ Create Lifting Plan'}
+            </Link>
+            <Link to={`/lifting/crane-checklist?permitId=${permit.id}`} className="text-center text-sm bg-slate-50 hover:bg-slate-100 rounded-lg py-3 font-medium text-slate-700">Crane Checklist</Link>
+            <Link to={`/lifting/site-preparation?permitId=${permit.id}`} className="text-center text-sm bg-slate-50 hover:bg-slate-100 rounded-lg py-3 font-medium text-slate-700">Site Preparation</Link>
+            <Link to={`/lifting/rigging?permitId=${permit.id}`} className="text-center text-sm bg-slate-50 hover:bg-slate-100 rounded-lg py-3 font-medium text-slate-700">Rigging Verification</Link>
+            <Link to={`/lifting/competency/${permit.id}`} className="text-center text-sm bg-slate-50 hover:bg-slate-100 rounded-lg py-3 font-medium text-slate-700">Competency</Link>
+            <Link to={`/lifting/field-verification/${permit.id}`} className="text-center text-sm bg-slate-50 hover:bg-slate-100 rounded-lg py-3 font-medium text-slate-700">Field Verification</Link>
+          </div>
+          {fieldVerification && (
+            <div className={`rounded-lg p-2.5 text-center font-bold text-sm mt-2 ${fieldVerification.ready_to_lift ? 'bg-green-50 text-success' : 'bg-red-50 text-danger'}`}>
+              {fieldVerification.ready_to_lift ? '🟢 READY TO LIFT' : '🔴 NOT READY TO LIFT'}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Approval history / audit */}
       <div className="bg-white rounded-xl shadow-sm p-4">

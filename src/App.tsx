@@ -7,6 +7,12 @@ import DashboardPage from '@/features/dashboard/DashboardPage';
 import CreatePermitPage from '@/features/permits/CreatePermitPage';
 import PermitDetailPage from '@/features/permits/PermitDetailPage';
 import PermitListPage from '@/features/permits/PermitListPage';
+import LiftingPlanFormPage from '@/features/lifting/LiftingPlanFormPage';
+import CraneChecklistPage from '@/features/lifting/CraneChecklistPage';
+import SitePreparationPage from '@/features/lifting/SitePreparationPage';
+import RiggingVerificationPage from '@/features/lifting/RiggingVerificationPage';
+import CompetencyPage from '@/features/lifting/CompetencyPage';
+import FieldVerificationPage from '@/features/lifting/FieldVerificationPage';
 
 const queryClient = new QueryClient();
 
@@ -47,7 +53,13 @@ export default function App() {
               <Route path="approvals" element={
                 <PermitListPage title="Pending Approvals" statuses={['submitted', 'under_review']} />
               } />
-              <Route path="lifting/plans/new" element={<Placeholder title="New Lifting Plan (Stage 3)" />} />
+              <Route path="lifting/plans/new" element={<LiftingPlanFormPage />} />
+              <Route path="lifting/plans/:id" element={<Placeholder title="View Lifting Plan (read-only view — coming shortly)" />} />
+              <Route path="lifting/crane-checklist" element={<CraneChecklistPage />} />
+              <Route path="lifting/site-preparation" element={<SitePreparationPage />} />
+              <Route path="lifting/rigging" element={<RiggingVerificationPage />} />
+              <Route path="lifting/competency/:permitId" element={<CompetencyPage />} />
+              <Route path="lifting/field-verification/:permitId" element={<FieldVerificationPage />} />
               <Route path="archive" element={<Placeholder title="Permit Archive (Stage 7)" />} />
               <Route path="search" element={<Placeholder title="Search (Stage 7)" />} />
               <Route path="qr/scan" element={<Placeholder title="QR Verification (Stage 6)" />} />
