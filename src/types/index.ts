@@ -42,6 +42,8 @@ export interface Permit {
   is_critical_lift: boolean;
   lifting_plan_id: string | null;
   crane_id: string | null;
+  crane_type: string | null;
+  rated_capacity_ton: number | null;
   load_weight_ton: number | null;
   created_by: string;
   created_at: string;

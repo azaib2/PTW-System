@@ -44,7 +44,7 @@ export default function CreatePermitPage() {
   const [criticalAnswers, setCriticalAnswers] = useState<Record<string, boolean>>({});
 
   const { register, handleSubmit, watch, formState: { errors } } = useForm<FormValues>({
-    defaultValues: { permit_type: initialType }
+    defaultValues: { permit_type: initialType, location: params.get('location') ?? '' }
   });
   const permitType = watch('permit_type');
 

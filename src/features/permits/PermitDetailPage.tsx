@@ -4,6 +4,11 @@ import { fetchLatestFieldVerification } from '@/features/lifting/liftingService'
 import { format } from 'date-fns';
 import { useAuth } from '@/features/auth/AuthContext';
 import StatusBadge from '@/components/StatusBadge';
+import FieldControlPanel from './FieldControlPanel';
+import AttachmentsPanel from '@/features/documents/AttachmentsPanel';
+import PhotosPanel from '@/features/documents/PhotosPanel';
+import PermitQrPanel from '@/features/qr/PermitQrPanel';
+import AuditTrailPanel from '@/features/audit/AuditTrailPanel';
 import {
   fetchPermit, fetchPermitControls, fetchPermitApprovals,
   updatePermitControl, submitPermit, approvePermit, rejectPermit, startReview
@@ -23,6 +28,7 @@ export default function PermitDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
   const [rejectRemarks, setRejectRemarks] = useState('');
   const [showRejectBox, setShowRejectBox] = useState(false);
 
@@ -69,6 +75,21 @@ export default function PermitDetailPage() {
     }
   }
 
+  async function downloadPdf() {
+    if (!permit) return;
+    setPdfBusy(true);
+    setError(null);
+    try {
+      const { generateHotColdWorkPdf, generateLiftingPackagePdf } = await import('@/features/pdf/pdfService');
+      if (permit.permit_type === 'lifting') await generateLiftingPackagePdf(permit.id);
+      else await generateHotColdWorkPdf(permit.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to generate PDF.');
+    } finally {
+      setPdfBusy(false);
+    }
+  }
+
   if (loading) return <div className="text-slate-400 text-sm">Loading…</div>;
   if (error && !permit) return <div className="rounded-lg bg-red-50 border border-danger text-red-800 text-sm p-3">{error}</div>;
   if (!permit || !profile) return null;
@@ -89,6 +110,10 @@ export default function PermitDetailPage() {
           </div>
           <StatusBadge status={permit.status} />
         </div>
+        <button onClick={downloadPdf} disabled={pdfBusy}
+          className="w-full text-sm bg-slate-50 hover:bg-slate-100 rounded-lg py-2.5 font-medium text-slate-700 disabled:opacity-60">
+          {pdfBusy ? 'Generating PDF…' : permit.permit_type === 'lifting' ? '📄 Download Full Lifting Package (PDF)' : '📄 Download Permit PDF'}
+        </button>
         {permit.is_critical_lift && (
           <div className="rounded-lg bg-red-50 border border-danger text-red-800 text-xs font-semibold p-2">🔴 CRITICAL LIFT</div>
         )}
@@ -150,6 +175,15 @@ export default function PermitDetailPage() {
         </div>
       )}
 
+      {/* Documents & Photos (Stage 5) */}
+      <AttachmentsPanel permitId={permit.id} disabled={permit.status === 'closed'} />
+      <PhotosPanel permitId={permit.id} disabled={permit.status === 'closed'} />
+
+      {/* QR Code (Stage 6) — generated once a permit is approved */}
+      {!['draft', 'submitted', 'under_review', 'rejected', 'cancelled'].includes(permit.status) && (
+        <PermitQrPanel permitId={permit.id} permitNumber={permit.permit_number} />
+      )}
+
       {/* Approval history / audit */}
       <div className="bg-white rounded-xl shadow-sm p-4">
         <h2 className="text-sm font-semibold text-slate-700 mb-2">Approval History</h2>
@@ -208,14 +242,15 @@ export default function PermitDetailPage() {
           </div>
         )}
 
-        {permit.status === 'approved' && (
-          <div className="text-center text-xs text-slate-400 py-2">
-            Start/Suspend/Complete/Close actions arrive in Stage 4 (Field Control).
-          </div>
-        )}
+        {permit.status === 'approved' || permit.status === 'active' || permit.status === 'expiring_soon'
+          || permit.status === 'suspended' || permit.status === 'completed' ? (
+          <FieldControlPanel permit={permit} onUpdate={load} />
+        ) : null}
       </div>
 
       <Link to="/permits/active" className="block text-center text-sm text-brand mt-2">← Back to permits</Link>
+
+      <AuditTrailPanel permitId={permit.id} />
     </div>
   );
 }

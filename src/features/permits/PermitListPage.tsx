@@ -9,6 +9,7 @@ export default function PermitListPage({ title, statuses }: { title: string; sta
   const [permits, setPermits] = useState<Permit[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     fetchPermits({ status: statuses })
@@ -17,12 +18,30 @@ export default function PermitListPage({ title, statuses }: { title: string; sta
       .finally(() => setLoading(false));
   }, [statuses]);
 
+  async function handleExport() {
+    setExporting(true);
+    try {
+      const { exportPermitsToExcel } = await import('@/features/reports/excelExport');
+      await exportPermitsToExcel({ statuses, label: title.replace(/\s+/g, '-') });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Export failed.');
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-bold text-navy">{title}</h1>
         <span className="text-xs text-slate-400">{permits.length} record{permits.length === 1 ? '' : 's'}</span>
       </div>
+
+      <button onClick={handleExport} disabled={exporting || permits.length === 0}
+        className="w-full text-sm bg-slate-50 hover:bg-slate-100 rounded-lg py-2.5 font-medium text-slate-700 disabled:opacity-60">
+        {exporting ? 'Exporting…' : '📊 Export to Excel'}
+      </button>
+
 
       {error && <div className="rounded-lg bg-red-50 border border-danger text-red-800 text-sm p-3">{error}</div>}
       {loading && <div className="text-slate-400 text-sm">Loading…</div>}

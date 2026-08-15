@@ -14,6 +14,14 @@ import SitePreparationPage from '@/features/lifting/SitePreparationPage';
 import RiggingVerificationPage from '@/features/lifting/RiggingVerificationPage';
 import CompetencyPage from '@/features/lifting/CompetencyPage';
 import FieldVerificationPage from '@/features/lifting/FieldVerificationPage';
+import QrScannerPage from '@/features/qr/QrScannerPage';
+import PublicVerifyPage from '@/features/qr/PublicVerifyPage';
+import LocationQrManagerPage from '@/features/qr/LocationQrManagerPage';
+import SearchPage from '@/features/search/SearchPage';
+import ArchivePage from '@/features/archive/ArchivePage';
+import ReportsPage from '@/features/reports/ReportsPage';
+import UsersPage from '@/features/users/UsersPage';
+import SettingsPage from '@/features/settings/SettingsPage';
 
 const queryClient = new QueryClient();
 
@@ -61,14 +69,15 @@ export default function App() {
               <Route path="lifting/rigging" element={<RiggingVerificationPage />} />
               <Route path="lifting/competency/:permitId" element={<CompetencyPage />} />
               <Route path="lifting/field-verification/:permitId" element={<FieldVerificationPage />} />
-              <Route path="archive" element={<Placeholder title="Permit Archive (Stage 7)" />} />
-              <Route path="search" element={<Placeholder title="Search (Stage 7)" />} />
-              <Route path="qr/scan" element={<Placeholder title="QR Verification (Stage 6)" />} />
-              <Route path="reports" element={<Placeholder title="Reports (Stage 7)" />} />
-              <Route path="users" element={<Placeholder title="Users (Stage 1 admin CRUD — pending)" />} />
-              <Route path="settings" element={<Placeholder title="Settings (Stage 1 admin CRUD — pending)" />} />
+              <Route path="archive" element={<ArchivePage />} />
+              <Route path="search" element={<SearchPage />} />
+              <Route path="qr/scan" element={<QrScannerPage />} />
+              <Route path="qr/locations" element={<LocationQrManagerPage />} />
+              <Route path="reports" element={<ReportsPage />} />
+              <Route path="users" element={<UsersPage />} />
+              <Route path="settings" element={<SettingsPage />} />
             </Route>
-            <Route path="/verify/:permitId" element={<Placeholder title="Public QR Verification (Stage 6)" />} />
+            <Route path="/verify/:permitId" element={<PublicVerifyPage />} />
           </Routes>
         </AuthProvider>
       </BrowserRouter>
