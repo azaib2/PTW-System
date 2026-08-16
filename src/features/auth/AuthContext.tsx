@@ -61,17 +61,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
     if (!profile) return;
 
-    pollRef.current = setInterval(async () => {
-      const stillActive = await isSessionStillActive(profile.id);
+    async function checkSession() {
+      const stillActive = await isSessionStillActive(profile!.id);
       if (!stillActive) {
         setSessionKickedOut(true);
-        clearInterval(pollRef.current!);
+        if (pollRef.current) clearInterval(pollRef.current);
         await supabase.auth.signOut();
         clearLocalSession();
       }
-    }, 25000);
+    }
 
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+    pollRef.current = setInterval(checkSession, 8000);
+    // Also check immediately whenever the tab becomes visible again — catches
+    // the case where a second device logged in while this tab was backgrounded,
+    // without waiting for the next interval tick.
+    document.addEventListener('visibilitychange', checkSession);
+
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+      document.removeEventListener('visibilitychange', checkSession);
+    };
   }, [profile]);
 
   async function signIn(email: string, password: string) {

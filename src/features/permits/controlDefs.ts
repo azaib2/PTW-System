@@ -65,8 +65,33 @@ export const CRITICAL_LIFT_QUESTIONS: { key: string; label: string }[] = [
   { key: 'project_defined_critical', label: 'Project-defined critical lift?' }
 ];
 
-export const CONTROLS_BY_TYPE: Record<'hot_work' | 'cold_work' | 'lifting', ControlDef[]> = {
+export const GENERAL_WORK_CONTROLS: ControlDef[] = [
+  { key: 'risk_assessment_approved', label: 'Risk assessment submitted and approved' },
+  { key: 'method_statement_approved', label: 'Method statement submitted and approved' },
+  { key: 'hazardous_materials_notes', label: 'Hazardous materials/transfer notes reviewed' },
+  { key: 'environmental_aspects_assessed', label: 'Environmental aspects assessment completed' },
+  { key: 'department_managers_informed', label: 'Department managers informed of the work' },
+  { key: 'site_specific_hazards_identified', label: 'Site-specific hazards identified to the contractor' },
+  { key: 'no_deviations_from_assessment', label: 'No unapproved deviations from method/risk assessment' },
+  { key: 'personnel_site_induction', label: 'Personnel received site induction and EHS handout' }
+];
+
+export const WORK_AT_HEIGHT_CONTROLS: ControlDef[] = [
+  { key: 'work_plan_in_place', label: 'There is a work plan in place for the working at height' },
+  { key: 'fall_arrest_equipment_inspected', label: 'All fall restraint/arrest equipment has valid inspection, tag and check prior to use' },
+  { key: 'guardrails_edge_protection', label: 'Guardrails/edge protection installed where applicable' },
+  { key: 'ladders_scaffold_inspected', label: 'Ladders/scaffold inspected and tagged' },
+  { key: 'barricades_warning_signs', label: 'Barricades and warning signs erected below the work area' },
+  { key: 'weather_conditions_checked', label: 'Weather conditions checked and acceptable' },
+  { key: 'rescue_plan_in_place', label: 'Rescue plan in place for fall arrest scenario' },
+  { key: 'competent_person_assigned', label: 'Competent person assigned to supervise the work' },
+  { key: 'ppe_harness_inspected', label: 'PPE (harness, lanyard) inspected before use' }
+];
+
+export const CONTROLS_BY_TYPE: Record<'hot_work' | 'cold_work' | 'lifting' | 'general_work' | 'work_at_height', ControlDef[]> = {
   hot_work: HOT_WORK_CONTROLS,
   cold_work: COLD_WORK_CONTROLS,
-  lifting: LIFTING_CONTROLS
+  lifting: LIFTING_CONTROLS,
+  general_work: GENERAL_WORK_CONTROLS,
+  work_at_height: WORK_AT_HEIGHT_CONTROLS
 };

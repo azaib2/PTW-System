@@ -14,9 +14,13 @@ function deviceLabel(): string {
 export async function claimSession(userId: string): Promise<string> {
   const token = crypto.randomUUID();
   sessionStorage.setItem(SESSION_KEY, token);
-  const { error } = await supabase.from('active_sessions').upsert({
-    user_id: userId, session_token: token, device_label: deviceLabel(), last_seen_at: new Date().toISOString()
-  });
+  const { error } = await supabase.from('active_sessions').upsert(
+    { user_id: userId, session_token: token, device_label: deviceLabel(), last_seen_at: new Date().toISOString() },
+    { onConflict: 'user_id' } // explicit conflict target — without this, some
+    // supabase-js/PostgREST versions silently fail to update the existing
+    // row, meaning the "second login" never actually overwrites the first
+    // session's token, so the kick-out check would never trigger.
+  );
   if (error) console.error('Could not register session (non-blocking):', error.message);
   return token;
 }

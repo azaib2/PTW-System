@@ -33,6 +33,18 @@ export interface CreatePermitInput {
   signalman_name?: string;
   signalman_contact?: string;
   critical_lift_answers?: Record<string, boolean>;
+  // General Work Permit
+  additional_information?: string;
+  department?: string;
+  alternative_company_contact?: string;
+  company_permit_issuer?: string;
+  hours_of_work?: string;
+  deviations_from_method_statement?: string;
+  site_specific_hazards?: string;
+  // Working at Height Permit
+  work_leader_name?: string;
+  superintendent_name?: string;
+  no_alternative_method_confirmed?: boolean;
   created_by: string;
 }
 

@@ -114,8 +114,12 @@ export async function generateHotColdWorkPdf(permitId: string) {
     fetchPermit(permitId), fetchPermitControls(permitId), fetchPermitApprovals(permitId), fetchPhotos(permitId)
   ]);
 
+  const TITLES: Record<string, string> = {
+    hot_work: 'Hot Work Permit', cold_work: 'Cold Work Permit',
+    general_work: 'General Work Permit', work_at_height: 'Working at Height Permit'
+  };
   const ctx = await initDoc(permit.permit_number);
-  sectionTitle(ctx, `${permit.permit_type === 'hot_work' ? 'Hot Work' : 'Cold Work'} Permit`);
+  sectionTitle(ctx, TITLES[permit.permit_type] ?? 'Permit');
   fieldLine(ctx, 'Status', permit.status.toUpperCase());
   fieldLine(ctx, 'Location', permit.location);
   fieldLine(ctx, 'Activity', permit.activity);

@@ -35,6 +35,16 @@ interface FormValues {
   rigger_contact: string;
   signalman_name: string;
   signalman_contact: string;
+  additional_information: string;
+  department: string;
+  alternative_company_contact: string;
+  company_permit_issuer: string;
+  hours_of_work: string;
+  deviations_from_method_statement: string;
+  site_specific_hazards: string;
+  work_leader_name: string;
+  superintendent_name: string;
+  no_alternative_method_confirmed: boolean;
 }
 
 export default function CreatePermitPage() {
@@ -100,6 +110,20 @@ export default function CreatePermitPage() {
           signalman_name: values.signalman_name,
           signalman_contact: values.signalman_contact || undefined,
           critical_lift_answers: criticalAnswers
+        } : {}),
+        ...(values.permit_type === 'general_work' ? {
+          additional_information: values.additional_information || undefined,
+          department: values.department || undefined,
+          alternative_company_contact: values.alternative_company_contact || undefined,
+          company_permit_issuer: values.company_permit_issuer || undefined,
+          hours_of_work: values.hours_of_work || undefined,
+          deviations_from_method_statement: values.deviations_from_method_statement || undefined,
+          site_specific_hazards: values.site_specific_hazards || undefined
+        } : {}),
+        ...(values.permit_type === 'work_at_height' ? {
+          work_leader_name: values.work_leader_name || undefined,
+          superintendent_name: values.superintendent_name || undefined,
+          no_alternative_method_confirmed: !!values.no_alternative_method_confirmed
         } : {})
       };
       if (!input.contractor_id) throw new Error('Select a contractor.');
@@ -132,6 +156,8 @@ export default function CreatePermitPage() {
               <option value="hot_work">Hot Work</option>
               <option value="cold_work">Cold Work</option>
               <option value="lifting">Lifting</option>
+              <option value="general_work">General Work</option>
+              <option value="work_at_height">Working at Height</option>
             </select>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -253,6 +279,44 @@ export default function CreatePermitPage() {
               )}
             </div>
           </>
+        )}
+
+        {permitType === 'general_work' && (
+          <div className="bg-white rounded-xl shadow-sm p-4 space-y-3">
+            <h2 className="text-sm font-semibold text-slate-700">General Work Details</h2>
+            <div>
+              <label className={labelClass}>Additional Information</label>
+              <textarea {...register('additional_information')} className={inputClass} rows={2} placeholder="Barriers, spotters, or other precautions" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className={labelClass}>Department</label><input {...register('department')} className={inputClass} /></div>
+              <div><label className={labelClass}>Hours of Work</label><input {...register('hours_of_work')} className={inputClass} /></div>
+              <div><label className={labelClass}>Alternative Company Contact</label><input {...register('alternative_company_contact')} className={inputClass} /></div>
+              <div><label className={labelClass}>Company Permit Issuer</label><input {...register('company_permit_issuer')} className={inputClass} /></div>
+            </div>
+            <div>
+              <label className={labelClass}>Deviations from Method/Risk Assessment</label>
+              <textarea {...register('deviations_from_method_statement')} className={inputClass} rows={2} placeholder="Leave blank if none" />
+            </div>
+            <div>
+              <label className={labelClass}>Site-Specific Hazards Identified to Contractor</label>
+              <textarea {...register('site_specific_hazards')} className={inputClass} rows={2} />
+            </div>
+          </div>
+        )}
+
+        {permitType === 'work_at_height' && (
+          <div className="bg-white rounded-xl shadow-sm p-4 space-y-3">
+            <h2 className="text-sm font-semibold text-slate-700">Working at Height Details</h2>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className={labelClass}>Work Leader / Supervisor</label><input {...register('work_leader_name')} className={inputClass} /></div>
+              <div><label className={labelClass}>Superintendent</label><input {...register('superintendent_name')} className={inputClass} /></div>
+            </div>
+            <label className="flex items-start gap-2 text-sm text-slate-700 pt-1">
+              <input type="checkbox" {...register('no_alternative_method_confirmed')} className="w-5 h-5 mt-0.5 accent-brand shrink-0" />
+              The task has been reviewed and there is no alternative method to avoid working at height.
+            </label>
+          </div>
         )}
 
         {error && <div className="rounded-lg bg-red-50 border border-danger text-red-800 text-sm p-3">{error}</div>}

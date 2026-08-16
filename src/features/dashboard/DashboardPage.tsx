@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
-import { Flame, Snowflake, Weight, AlertTriangle, QrCode } from 'lucide-react';
+import { Flame, Snowflake, Weight, AlertTriangle, QrCode, FileText, ArrowUp } from 'lucide-react';
 
 interface Counts {
   active: number; pending: number; expiring: number; expired: number;
@@ -58,6 +58,8 @@ export default function DashboardPage() {
     { to: '/permits/new?type=hot_work', label: 'Create Hot Work', icon: Flame },
     { to: '/permits/new?type=cold_work', label: 'Create Cold Work', icon: Snowflake },
     { to: '/permits/new?type=lifting', label: 'Create Lifting', icon: Weight },
+    { to: '/permits/new?type=general_work', label: 'Create General Work', icon: FileText },
+    { to: '/permits/new?type=work_at_height', label: 'Create Work at Height', icon: ArrowUp },
     { to: '/lifting/plans/new', label: 'Create Lifting Plan', icon: AlertTriangle },
     { to: '/qr/scan', label: 'Scan Permit QR', icon: QrCode }
   ];

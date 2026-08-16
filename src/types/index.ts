@@ -8,7 +8,7 @@ export type AppRole =
   | 'permit_approver'
   | 'administrator';
 
-export type PermitType = 'hot_work' | 'cold_work' | 'lifting';
+export type PermitType = 'hot_work' | 'cold_work' | 'lifting' | 'general_work' | 'work_at_height';
 
 export type PermitStatus =
   | 'draft' | 'submitted' | 'under_review' | 'approved' | 'active'
@@ -68,7 +68,9 @@ export const STATUS_COLOR: Record<PermitStatus, string> = {
 export const PERMIT_PREFIX: Record<PermitType, string> = {
   hot_work: 'HW',
   cold_work: 'CW',
-  lifting: 'LFT'
+  lifting: 'LFT',
+  general_work: 'GWP',
+  work_at_height: 'WAH'
 };
 
 // Role -> capability matrix (mirrors the RLS policies; UI-layer convenience
