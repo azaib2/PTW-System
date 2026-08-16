@@ -1,7 +1,8 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode, useRef } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import type { AppUser } from '@/types';
+import { claimSession, isSessionStillActive, clearLocalSession } from './sessionService';
 
 interface AuthContextValue {
   session: Session | null;
@@ -9,6 +10,7 @@ interface AuthContextValue {
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
+  sessionKickedOut: boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -17,7 +19,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
-
+  const [sessionKickedOut, setSessionKickedOut] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   async function loadProfile(userId: string) {
     const { data, error } = await supabase
       .from('users')
@@ -50,17 +53,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => sub.subscription.unsubscribe();
   }, []);
 
+  // Single-active-session enforcement: once we know who's logged in, poll
+  // periodically to check whether a different device has since claimed the
+  // session slot for this account. If so, force a local sign-out with a
+  // clear explanation rather than silently continuing.
+  useEffect(() => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    if (!profile) return;
+
+    pollRef.current = setInterval(async () => {
+      const stillActive = await isSessionStillActive(profile.id);
+      if (!stillActive) {
+        setSessionKickedOut(true);
+        clearInterval(pollRef.current!);
+        await supabase.auth.signOut();
+        clearLocalSession();
+      }
+    }, 25000);
+
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [profile]);
+
   async function signIn(email: string, password: string) {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (!error && data.user) {
+      await claimSession(data.user.id); // claims the single-session slot, kicking any other device
+      setSessionKickedOut(false);
+    }
     return { error: error?.message ?? null };
   }
 
   async function signOut() {
+    clearLocalSession();
     await supabase.auth.signOut();
   }
 
   return (
-    <AuthContext.Provider value={{ session, profile, loading, signIn, signOut }}>
+    <AuthContext.Provider value={{ session, profile, loading, signIn, signOut, sessionKickedOut }}>
       {children}
     </AuthContext.Provider>
   );

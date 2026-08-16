@@ -11,7 +11,7 @@ const MARGIN = 50;
 const PAGE_W = 595.28; // A4 portrait, points
 const PAGE_H = 841.89;
 
-interface Ctx { doc: PDFDocument; font: PDFFont; bold: PDFFont; page: PDFPage; y: number; pageNum: number; permitNumber: string; }
+interface Ctx { doc: PDFDocument; font: PDFFont; bold: PDFFont; page: PDFPage; y: number; pageNum: number; permitNumber: string; logo: any; }
 
 function newPage(ctx: Ctx) {
   ctx.page = ctx.doc.addPage([PAGE_W, PAGE_H]);
@@ -21,7 +21,10 @@ function newPage(ctx: Ctx) {
 }
 
 function header(ctx: Ctx) {
-  ctx.page.drawText('DIGITAL HSE PTW', { x: MARGIN, y: ctx.y, size: 14, font: ctx.bold, color: rgb(0.06, 0.09, 0.16) });
+  if (ctx.logo) {
+    const logoW = 90, logoH = (ctx.logo.height / ctx.logo.width) * logoW;
+    ctx.page.drawImage(ctx.logo, { x: MARGIN, y: ctx.y - logoH + 10, width: logoW, height: logoH });
+  }
   ctx.page.drawText(ctx.permitNumber, { x: PAGE_W - MARGIN - 120, y: ctx.y, size: 11, font: ctx.bold, color: rgb(0.15, 0.39, 0.92) });
   ctx.y -= 20;
   ctx.page.drawLine({ start: { x: MARGIN, y: ctx.y }, end: { x: PAGE_W - MARGIN, y: ctx.y }, thickness: 1, color: rgb(0.85, 0.87, 0.9) });
@@ -80,7 +83,14 @@ async function initDoc(permitNumber: string): Promise<Ctx> {
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
-  const ctx: Ctx = { doc, font, bold, page: null as unknown as PDFPage, y: 0, pageNum: 0, permitNumber };
+  let logo = null;
+  try {
+    const logoBytes = await (await fetch('/branding/dar-logo.png')).arrayBuffer();
+    logo = await doc.embedPng(logoBytes);
+  } catch {
+    // Logo optional — PDF still generates correctly without it.
+  }
+  const ctx: Ctx = { doc, font, bold, page: null as unknown as PDFPage, y: 0, pageNum: 0, permitNumber, logo };
   newPage(ctx);
   return ctx;
 }

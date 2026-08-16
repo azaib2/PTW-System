@@ -75,6 +75,16 @@ not automatic crons. Wire them to run daily via Supabase's **Scheduled
 Edge Functions** (Dashboard → Edge Functions → Cron) once you reach Stage 7 —
 this keeps the free tier working without requiring `pg_cron` superuser access.
 
+## Automated tests
+
+Stage 8 QA added a small automated test suite for the safety-critical pure logic (crane checklist critical-item gating, mandatory-field validation, crash recovery):
+
+```bash
+npm run test
+```
+
+This is not a substitute for manually running through the Stage 8 checklist against your live deployment — it covers the logic that's practical to test in isolation, not integration behavior (RLS, geofencing triggers, real approval flows).
+
 ## Development Stages
 
 | Stage | Scope | Status |

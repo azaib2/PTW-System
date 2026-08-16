@@ -15,20 +15,26 @@ interface FormValues {
   exact_area: string;
   activity: string;
   description: string;
+  detail_of_surroundings: string;
   supervisor_name: string;
   workers: string;
   start_time: string;
   expiry_time: string;
   hot_work_type: string;
+  fire_watcher_name: string;
   load_description: string;
   load_weight_ton: string;
   crane_type: string;
   rated_capacity_ton: string;
   crane_manufacturer: string;
   lifting_supervisor_name: string;
+  lifting_supervisor_contact: string;
   crane_operator_name: string;
+  crane_operator_contact: string;
   rigger_name: string;
+  rigger_contact: string;
   signalman_name: string;
+  signalman_contact: string;
 }
 
 export default function CreatePermitPage() {
@@ -72,12 +78,13 @@ export default function CreatePermitPage() {
         exact_area: values.exact_area || undefined,
         activity: values.activity,
         description: values.description || undefined,
+        detail_of_surroundings: values.detail_of_surroundings || undefined,
         supervisor_name: values.supervisor_name,
         workers: values.workers ? values.workers.split(',').map(w => w.trim()).filter(Boolean) : undefined,
         start_time: new Date(values.start_time).toISOString(),
         expiry_time: new Date(values.expiry_time).toISOString(),
         created_by: profile.id,
-        ...(values.permit_type === 'hot_work' ? { hot_work_type: values.hot_work_type } : {}),
+        ...(values.permit_type === 'hot_work' ? { hot_work_type: values.hot_work_type, fire_watcher_name: values.fire_watcher_name || undefined } : {}),
         ...(values.permit_type === 'lifting' ? {
           load_description: values.load_description,
           load_weight_ton: values.load_weight_ton ? Number(values.load_weight_ton) : undefined,
@@ -85,9 +92,13 @@ export default function CreatePermitPage() {
           rated_capacity_ton: values.rated_capacity_ton ? Number(values.rated_capacity_ton) : undefined,
           crane_manufacturer: values.crane_manufacturer,
           lifting_supervisor_name: values.lifting_supervisor_name,
+          lifting_supervisor_contact: values.lifting_supervisor_contact || undefined,
           crane_operator_name: values.crane_operator_name,
+          crane_operator_contact: values.crane_operator_contact || undefined,
           rigger_name: values.rigger_name,
+          rigger_contact: values.rigger_contact || undefined,
           signalman_name: values.signalman_name,
+          signalman_contact: values.signalman_contact || undefined,
           critical_lift_answers: criticalAnswers
         } : {})
       };
@@ -110,6 +121,10 @@ export default function CreatePermitPage() {
       <h1 className="text-lg font-bold text-navy">Create Permit</h1>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <div className="rounded-lg bg-amber-50 border border-warning text-amber-800 text-xs font-semibold p-3">
+          This permit is valid for one shift only and is not extendable without a formal Extension request.
+        </div>
+
         <div className="bg-white rounded-xl shadow-sm p-4 space-y-3">
           <div>
             <label className={labelClass}>Permit Type *</label>
@@ -157,6 +172,10 @@ export default function CreatePermitPage() {
             <label className={labelClass}>Description</label>
             <textarea {...register('description')} className={inputClass} rows={2} />
           </div>
+          <div>
+            <label className={labelClass}>Detail of Surroundings</label>
+            <textarea {...register('detail_of_surroundings')} className={inputClass} rows={2} placeholder="Adjacent hazards, exposures, nearby activity…" />
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelClass}>Supervisor *</label>
@@ -185,6 +204,10 @@ export default function CreatePermitPage() {
             <select {...register('hot_work_type', { required: true })} className={inputClass}>
               {HOT_WORK_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
+            <div>
+              <label className={labelClass}>Fire Watcher</label>
+              <input {...register('fire_watcher_name')} className={inputClass} placeholder="Name of assigned fire watcher" />
+            </div>
             <p className="text-xs text-slate-400">Gas testing readings are recorded separately by the assigned gas tester before field controls are verified.</p>
           </div>
         )}
@@ -205,9 +228,13 @@ export default function CreatePermitPage() {
               <h2 className="text-sm font-semibold text-slate-700">Personnel</h2>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className={labelClass}>Lifting Supervisor</label><input {...register('lifting_supervisor_name')} className={inputClass} /></div>
+                <div><label className={labelClass}>Contact</label><input {...register('lifting_supervisor_contact')} className={inputClass} /></div>
                 <div><label className={labelClass}>Crane Operator</label><input {...register('crane_operator_name')} className={inputClass} /></div>
+                <div><label className={labelClass}>Contact</label><input {...register('crane_operator_contact')} className={inputClass} /></div>
                 <div><label className={labelClass}>Rigger</label><input {...register('rigger_name')} className={inputClass} /></div>
+                <div><label className={labelClass}>Contact</label><input {...register('rigger_contact')} className={inputClass} /></div>
                 <div><label className={labelClass}>Signalman</label><input {...register('signalman_name')} className={inputClass} /></div>
+                <div><label className={labelClass}>Contact</label><input {...register('signalman_contact')} className={inputClass} /></div>
               </div>
             </div>
             <div className="bg-white rounded-xl shadow-sm p-4 space-y-2">

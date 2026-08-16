@@ -4,7 +4,7 @@ import { useAuth } from './AuthContext';
 import { isSupabaseConfigured } from '@/lib/supabase';
 
 export default function LoginPage() {
-  const { signIn } = useAuth();
+  const { signIn, sessionKickedOut } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -25,8 +25,8 @@ export default function LoginPage() {
     <div className="min-h-screen flex flex-col items-center justify-center bg-bgapp px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="text-navy font-bold text-2xl">DIGITAL HSE PTW</div>
-          <div className="text-slate-500 text-sm mt-1">Permit to Work & Lifting Management System</div>
+          <img src="/branding/dar-logo.png" alt="DAR" className="h-10 mx-auto mb-3" />
+          <div className="text-slate-500 text-sm">Permit to Work & Lifting Management System</div>
         </div>
 
         {!isSupabaseConfigured && (
@@ -34,6 +34,13 @@ export default function LoginPage() {
             Supabase is not configured yet. Set VITE_SUPABASE_URL and
             VITE_SUPABASE_ANON_KEY in <code>.env.local</code> — see README.md.
             Login will not work until this is done.
+          </div>
+        )}
+
+        {sessionKickedOut && (
+          <div className="mb-4 rounded-lg bg-amber-50 border border-warning text-amber-800 text-sm p-3">
+            You were signed out because this account was logged in on another device.
+            If that wasn't you, contact your administrator — accounts must not be shared between people.
           </div>
         )}
 

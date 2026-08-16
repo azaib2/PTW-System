@@ -1,4 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
 import { useAuth } from '@/features/auth/AuthContext';
 import {
   LayoutDashboard, FilePlus, ClipboardList, Archive, Search, QrCode,
@@ -21,15 +22,21 @@ const NAV = [
 const MOBILE_NAV = NAV.slice(0, 5);
 
 export default function AppLayout() {
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, sessionKickedOut } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (sessionKickedOut) navigate('/login');
+  }, [sessionKickedOut, navigate]);
 
   return (
     <div className="min-h-screen bg-bgapp flex">
       {/* Desktop sidebar */}
       <aside className="hidden md:flex md:w-60 md:flex-col bg-navy text-white shrink-0">
         <div className="px-4 py-5 border-b border-white/10">
-          <div className="font-bold text-lg">DIGITAL HSE PTW</div>
+          <div className="bg-white rounded-lg px-3 py-2 inline-block mb-1">
+            <img src="/branding/dar-logo.png" alt="DAR" className="h-6" />
+          </div>
           <div className="text-xs text-slate-300">Project HSE Control Center</div>
         </div>
         <nav className="flex-1 px-2 py-3 space-y-1 overflow-y-auto">
@@ -54,7 +61,9 @@ export default function AppLayout() {
       <div className="flex-1 flex flex-col min-w-0">
         <header className="md:hidden bg-navy text-white px-4 py-3 flex items-center justify-between sticky top-0 z-10">
           <div>
-            <div className="font-bold text-base leading-tight">DIGITAL HSE PTW</div>
+            <div className="bg-white rounded-lg px-2 py-1.5 inline-block mb-0.5">
+              <img src="/branding/dar-logo.png" alt="DAR" className="h-5" />
+            </div>
             <div className="text-[11px] text-slate-300">Project HSE Control Center</div>
           </div>
           <button onClick={async () => { await signOut(); navigate('/login'); }} aria-label="Sign out">

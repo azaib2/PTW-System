@@ -15,8 +15,16 @@ if (!url || !anonKey || url.includes('YOUR_PROJECT_REF')) {
   );
 }
 
-export const supabase = createClient(url ?? '', anonKey ?? '', {
-  auth: { persistSession: true, autoRefreshToken: true }
-});
-
 export const isSupabaseConfigured = Boolean(url && anonKey && !url.includes('YOUR_PROJECT_REF'));
+
+// createClient() throws synchronously on an empty URL, which would crash the
+// entire app at module-load time (before React even mounts) if env vars are
+// ever missing in a deployment. Fall back to a syntactically valid but inert
+// placeholder so the app always boots; isSupabaseConfigured (and the actual
+// failed network calls) are what surface the real "not configured" state to
+// the user, rather than a hard crash.
+export const supabase = createClient(
+  isSupabaseConfigured ? url : 'https://not-configured.supabase.co',
+  isSupabaseConfigured ? anonKey : 'not-configured',
+  { auth: { persistSession: true, autoRefreshToken: true } }
+);

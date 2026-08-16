@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { format } from 'date-fns';
 import { useAuth } from '@/features/auth/AuthContext';
+import ReAuthModal from '@/features/auth/ReAuthModal';
 import { CAN_APPROVE, type Permit } from '@/types';
 import {
   SUSPENSION_REASONS, startPermit, suspendPermit, fetchLatestSuspension, resumePermit,
@@ -33,6 +34,7 @@ export default function FieldControlPanel({ permit, onUpdate }: { permit: Permit
     residual_hazards_removed: false, barricades_removed: false
   });
   const [closeRemarks, setCloseRemarks] = useState('');
+  const [pendingAction, setPendingAction] = useState<{ label: string; fn: () => Promise<void> } | null>(null);
 
   useEffect(() => {
     if (permit.status === 'suspended') fetchLatestSuspension(permit.id).then(setSuspension).catch(() => {});
@@ -59,13 +61,17 @@ export default function FieldControlPanel({ permit, onUpdate }: { permit: Permit
   const canOperate = CAN_APPROVE.includes(profile.role); // HSE-capable roles handle field control actions
   const pendingExtension = extensions.find(e => e.status === 'pending');
 
+  function requireReauth(label: string, fn: () => Promise<void>) {
+    setPendingAction({ label, fn });
+  }
+
   return (
     <div className="space-y-2">
       {error && <div className="rounded-lg bg-red-50 border border-danger text-red-800 text-sm p-3">{error}</div>}
 
       {/* APPROVED -> START */}
       {permit.status === 'approved' && (
-        <button disabled={busy} onClick={() => run(() => startPermit(permit, profile.id))}
+        <button disabled={busy} onClick={() => requireReauth(permit.permit_type === 'lifting' ? 'start this lift' : 'start this work', () => startPermit(permit, profile.id))}
           className="w-full bg-success text-white font-semibold py-3.5 rounded-lg disabled:opacity-60">
           {busy ? 'Starting…' : permit.permit_type === 'lifting' ? 'START LIFT' : 'START WORK'}
         </button>
@@ -99,7 +105,7 @@ export default function FieldControlPanel({ permit, onUpdate }: { permit: Permit
           <textarea value={suspendRemarks} onChange={e => setSuspendRemarks(e.target.value)}
             placeholder="Remarks (required)" className={inputClass} rows={2} />
           <button disabled={busy || !suspendRemarks.trim()}
-            onClick={() => run(() => suspendPermit(permit.id, profile.id, suspendReason, suspendRemarks, permit.status))}
+            onClick={() => requireReauth('suspend this permit', () => suspendPermit(permit.id, profile.id, suspendReason, suspendRemarks, permit.status))}
             className="w-full bg-danger text-white font-semibold py-2.5 rounded-lg disabled:opacity-60">
             Confirm Suspension
           </button>
@@ -127,7 +133,7 @@ export default function FieldControlPanel({ permit, onUpdate }: { permit: Permit
                   <textarea value={resumeRemarks} onChange={e => setResumeRemarks(e.target.value)}
                     placeholder="Corrective action taken / verification remarks (required)" className={inputClass} rows={2} />
                   <button disabled={busy || !resumeRemarks.trim()}
-                    onClick={() => run(() => resumePermit(suspension.id, permit.id, profile.id, resumeRemarks))}
+                    onClick={() => requireReauth('resume this permit', () => resumePermit(suspension.id, permit.id, profile.id, resumeRemarks))}
                     className="w-full bg-success text-white font-semibold py-2.5 rounded-lg disabled:opacity-60">
                     Confirm Resume
                   </button>
@@ -186,7 +192,7 @@ export default function FieldControlPanel({ permit, onUpdate }: { permit: Permit
               placeholder="Explanation (required)" className={inputClass} rows={2} />
           )}
           <button disabled={busy || completedPerPlan === null}
-            onClick={() => run(() => completePermit(permit.id, profile.id, !!completedPerPlan, completeExplanation, permit.status))}
+            onClick={() => requireReauth('mark this permit complete', () => completePermit(permit.id, profile.id, !!completedPerPlan, completeExplanation, permit.status))}
             className="w-full bg-brand text-white font-semibold py-2.5 rounded-lg disabled:opacity-60">
             Confirm Completion
           </button>
@@ -219,7 +225,7 @@ export default function FieldControlPanel({ permit, onUpdate }: { permit: Permit
           ))}
           <textarea value={closeRemarks} onChange={e => setCloseRemarks(e.target.value)} placeholder="Closure remarks" className={inputClass} rows={2} />
           <button disabled={busy}
-            onClick={() => run(() => closePermit(permit.id, profile.id, closureChecklist, closeRemarks, permit.status))}
+            onClick={() => requireReauth('close this permit', () => closePermit(permit.id, profile.id, closureChecklist, closeRemarks, permit.status))}
             className="w-full bg-navy text-white font-semibold py-2.5 rounded-lg disabled:opacity-60">
             Confirm Closure
           </button>
@@ -228,6 +234,15 @@ export default function FieldControlPanel({ permit, onUpdate }: { permit: Permit
 
       {permit.status === 'closed' && (
         <div className="text-center text-xs text-slate-400 py-2">This permit is closed and can no longer be modified.</div>
+      )}
+
+      {pendingAction && (
+        <ReAuthModal
+          actionLabel={pendingAction.label}
+          permitId={permit.id}
+          onCancel={() => setPendingAction(null)}
+          onConfirmed={() => { const action = pendingAction; setPendingAction(null); run(action.fn); }}
+        />
       )}
     </div>
   );

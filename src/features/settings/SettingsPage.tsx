@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/features/auth/AuthContext';
+import { getCurrentLocation } from '@/lib/geolocation';
 
-interface Project { id: string; project_name: string; project_number: string; retention_days: number; }
+interface Project {
+  id: string; project_name: string; project_number: string; retention_days: number;
+  site_latitude: number | null; site_longitude: number | null; geofence_radius_m: number; geofence_enforced: boolean;
+}
 interface Contractor { id: string; company_name: string; contact_name: string | null; email: string | null; status: string; }
 
 export default function SettingsPage() {
@@ -21,7 +25,7 @@ export default function SettingsPage() {
   async function load() {
     const [{ data: settings }, { data: proj }, { data: cont }] = await Promise.all([
       supabase.from('system_settings').select('*').limit(1).maybeSingle(),
-      supabase.from('projects').select('id, project_name, project_number, retention_days').order('project_name'),
+      supabase.from('projects').select('id, project_name, project_number, retention_days, site_latitude, site_longitude, geofence_radius_m, geofence_enforced').order('project_name'),
       supabase.from('contractors').select('id, company_name, contact_name, email, status').order('company_name')
     ]);
     if (settings) setRetentionDays(settings.project_default_retention_days);
@@ -90,6 +94,35 @@ export default function SettingsPage() {
     }
   }
 
+  async function useMyLocationForProject(projectId: string) {
+    setSaving(true);
+    setError(null);
+    try {
+      const coords = await getCurrentLocation();
+      const { error } = await supabase.from('projects').update({ site_latitude: coords.latitude, site_longitude: coords.longitude }).eq('id', projectId);
+      if (error) throw new Error(error.message);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to capture location.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function updateGeofence(projectId: string, patch: Partial<Pick<Project, 'geofence_radius_m' | 'geofence_enforced'>>) {
+    setSaving(true);
+    setError(null);
+    try {
+      const { error } = await supabase.from('projects').update(patch).eq('id', projectId);
+      if (error) throw new Error(error.message);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to update geofence.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   if (!isAdmin) {
     return <div className="bg-white rounded-xl shadow-sm p-6 text-sm text-slate-500">Only administrators can access Settings.</div>;
   }
@@ -114,11 +147,42 @@ export default function SettingsPage() {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm p-4 space-y-2">
-        <h2 className="text-sm font-semibold text-slate-700">Projects</h2>
+        <h2 className="text-sm font-semibold text-slate-700">Projects & Site Geofencing</h2>
+        <p className="text-xs text-slate-400">
+          When geofencing is on for a project, users must be physically within range of the site to raise or approve
+          permits for it — enforced in the database, not just the app. Stand at the site and tap "Use my location" to set it.
+        </p>
         {projects.map(p => (
-          <div key={p.id} className="flex justify-between text-sm py-1.5 border-b border-slate-100 last:border-0">
-            <span>{p.project_name} <span className="text-xs text-slate-400">({p.project_number})</span></span>
-            <span className="text-xs text-slate-400">{p.retention_days}d retention</span>
+          <div key={p.id} className="border-b border-slate-100 last:border-0 py-3 space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="font-medium">{p.project_name} <span className="text-xs text-slate-400">({p.project_number})</span></span>
+              <span className="text-xs text-slate-400">{p.retention_days}d retention</span>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-500">
+                {p.site_latitude != null ? `Site set: ${p.site_latitude.toFixed(5)}, ${p.site_longitude!.toFixed(5)}` : 'No site location set'}
+              </span>
+              <button onClick={() => useMyLocationForProject(p.id)} disabled={saving} className="text-brand font-medium disabled:opacity-60">
+                Use my location
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-slate-500 flex-1">Geofence radius (m)</label>
+              <input type="number" min={50} defaultValue={p.geofence_radius_m}
+                onBlur={e => updateGeofence(p.id, { geofence_radius_m: Number(e.target.value) })}
+                className="w-24 rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
+            </div>
+            <label className="flex items-center justify-between text-xs">
+              <span className={p.geofence_enforced ? 'text-slate-700 font-medium' : 'text-slate-500'}>
+                Enforce geofencing on this project
+              </span>
+              <input type="checkbox" checked={p.geofence_enforced} disabled={saving || p.site_latitude == null}
+                onChange={e => updateGeofence(p.id, { geofence_enforced: e.target.checked })}
+                className="w-5 h-5 accent-brand" />
+            </label>
+            {p.geofence_enforced && p.site_latitude == null && (
+              <div className="text-xs text-danger">Set a site location before enabling enforcement.</div>
+            )}
           </div>
         ))}
         <div className="flex gap-2 pt-2">

@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { PERMIT_PREFIX, type Permit, type PermitType } from '@/types';
 import { CONTROLS_BY_TYPE } from './controlDefs';
+import { getCurrentLocation } from '@/lib/geolocation';
 
 export interface CreatePermitInput {
   permit_type: PermitType;
@@ -10,11 +11,13 @@ export interface CreatePermitInput {
   exact_area?: string;
   activity: string;
   description?: string;
+  detail_of_surroundings?: string;
   supervisor_name: string;
   workers?: string[];
   start_time: string;
   expiry_time: string;
   hot_work_type?: string;
+  fire_watcher_name?: string;
   gas_test?: Record<string, unknown>;
   load_description?: string;
   load_weight_ton?: number;
@@ -22,9 +25,13 @@ export interface CreatePermitInput {
   rated_capacity_ton?: number;
   crane_manufacturer?: string;
   lifting_supervisor_name?: string;
+  lifting_supervisor_contact?: string;
   crane_operator_name?: string;
+  crane_operator_contact?: string;
   rigger_name?: string;
+  rigger_contact?: string;
   signalman_name?: string;
+  signalman_contact?: string;
   critical_lift_answers?: Record<string, boolean>;
   created_by: string;
 }
@@ -49,6 +56,19 @@ export async function generatePermitNumber(type: PermitType): Promise<string> {
 }
 
 export async function createPermit(input: CreatePermitInput) {
+  // If the project has geofencing enabled, capture the browser's current
+  // location and let the database trigger enforce the distance check —
+  // this can't be bypassed by disabling client JS since Postgres does the
+  // actual comparison, not this function.
+  const { data: project } = await supabase.from('projects').select('geofence_enforced').eq('id', input.project_id).maybeSingle();
+  let created_latitude: number | undefined;
+  let created_longitude: number | undefined;
+  if (project?.geofence_enforced) {
+    const coords = await getCurrentLocation(); // throws with a clear message if denied/unavailable
+    created_latitude = coords.latitude;
+    created_longitude = coords.longitude;
+  }
+
   const permit_number = await generatePermitNumber(input.permit_type);
   const isCritical = input.permit_type === 'lifting' && input.critical_lift_answers
     ? Object.values(input.critical_lift_answers).some(Boolean)
@@ -56,10 +76,10 @@ export async function createPermit(input: CreatePermitInput) {
 
   const { data: permit, error } = await supabase
     .from('permits')
-    .insert({ ...input, permit_number, status: 'draft', is_critical_lift: isCritical })
+    .insert({ ...input, permit_number, status: 'draft', is_critical_lift: isCritical, created_latitude, created_longitude })
     .select()
     .single();
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(error.message); // includes the geofence distance message from the DB trigger, if blocked
 
   // Seed the control checklist rows for this permit type so the field
   // form has something to check against.
@@ -113,13 +133,28 @@ export async function approvePermit(permitId: string, userId: string, createdBy:
   const missing = findMissingMandatoryFields(permit as Permit);
   if (missing.length) throw new Error(`Cannot approve — missing required fields: ${missing.join(', ')}`);
 
+  const { data: project } = await supabase.from('projects').select('geofence_enforced').eq('id', permit.project_id).maybeSingle();
+  let latitude: number | undefined;
+  let longitude: number | undefined;
+  if (project?.geofence_enforced) {
+    const coords = await getCurrentLocation();
+    latitude = coords.latitude;
+    longitude = coords.longitude;
+  }
+
+  // Insert the approval record FIRST — the geofence trigger lives on this
+  // table, so if it's out of range this throws before the permit's status
+  // is ever touched, avoiding a permit stuck "approved" with no valid
+  // approval record behind it.
+  const { error: approvalErr } = await supabase.from('permit_approvals').insert({ permit_id: permitId, action: 'approved', actor_id: userId, latitude, longitude });
+  if (approvalErr) throw new Error(approvalErr.message); // includes the geofence distance message from the DB trigger, if blocked
+
   const { error } = await supabase
     .from('permits')
     .update({ status: 'approved', approved_by: userId, approved_at: new Date().toISOString() })
     .eq('id', permitId);
   if (error) throw new Error(error.message); // RLS also blocks self-approval server-side as a backstop
 
-  await supabase.from('permit_approvals').insert({ permit_id: permitId, action: 'approved', actor_id: userId });
   await logAudit('permits', permitId, 'approved', permit.status, 'approved', null);
 }
 

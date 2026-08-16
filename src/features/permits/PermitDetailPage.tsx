@@ -9,6 +9,7 @@ import AttachmentsPanel from '@/features/documents/AttachmentsPanel';
 import PhotosPanel from '@/features/documents/PhotosPanel';
 import PermitQrPanel from '@/features/qr/PermitQrPanel';
 import AuditTrailPanel from '@/features/audit/AuditTrailPanel';
+import ReAuthModal from '@/features/auth/ReAuthModal';
 import {
   fetchPermit, fetchPermitControls, fetchPermitApprovals,
   updatePermitControl, submitPermit, approvePermit, rejectPermit, startReview
@@ -31,6 +32,7 @@ export default function PermitDetailPage() {
   const [pdfBusy, setPdfBusy] = useState(false);
   const [rejectRemarks, setRejectRemarks] = useState('');
   const [showRejectBox, setShowRejectBox] = useState(false);
+  const [pendingAction, setPendingAction] = useState<{ label: string; fn: () => Promise<void> } | null>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -219,7 +221,7 @@ export default function PermitDetailPage() {
 
         {(permit.status === 'submitted' || permit.status === 'under_review') && canApprove && (
           <div className="flex gap-2">
-            <button disabled={actionBusy} onClick={() => runAction(() => approvePermit(permit.id, profile.id, permit.created_by))}
+            <button disabled={actionBusy} onClick={() => setPendingAction({ label: 'approve this permit', fn: () => approvePermit(permit.id, profile.id, permit.created_by) })}
               className="flex-1 bg-success text-white font-semibold py-3.5 rounded-lg disabled:opacity-60">
               Approve
             </button>
@@ -235,7 +237,10 @@ export default function PermitDetailPage() {
             <textarea value={rejectRemarks} onChange={e => setRejectRemarks(e.target.value)}
               placeholder="Reason for rejection (required)" className="w-full border border-slate-300 rounded-lg p-2 text-sm" rows={2} />
             <button disabled={actionBusy || !rejectRemarks.trim()}
-              onClick={() => runAction(() => rejectPermit(permit.id, profile.id, rejectRemarks)).then(() => { setShowRejectBox(false); setRejectRemarks(''); })}
+              onClick={() => setPendingAction({
+                label: 'reject this permit',
+                fn: () => rejectPermit(permit.id, profile.id, rejectRemarks).then(() => { setShowRejectBox(false); setRejectRemarks(''); })
+              })}
               className="w-full bg-danger text-white font-semibold py-2.5 rounded-lg disabled:opacity-60">
               Confirm Rejection
             </button>
@@ -251,6 +256,15 @@ export default function PermitDetailPage() {
       <Link to="/permits/active" className="block text-center text-sm text-brand mt-2">← Back to permits</Link>
 
       <AuditTrailPanel permitId={permit.id} />
+
+      {pendingAction && (
+        <ReAuthModal
+          actionLabel={pendingAction.label}
+          permitId={permit.id}
+          onCancel={() => setPendingAction(null)}
+          onConfirmed={() => { const action = pendingAction; setPendingAction(null); runAction(action.fn); }}
+        />
+      )}
     </div>
   );
 }
