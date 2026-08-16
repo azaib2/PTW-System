@@ -23,14 +23,22 @@ export default function SettingsPage() {
   const [newContractorEmail, setNewContractorEmail] = useState('');
 
   async function load() {
-    const [{ data: settings }, { data: proj }, { data: cont }] = await Promise.all([
+    setError(null);
+    const [settingsRes, projRes, contRes] = await Promise.all([
       supabase.from('system_settings').select('*').limit(1).maybeSingle(),
       supabase.from('projects').select('id, project_name, project_number, retention_days, site_latitude, site_longitude, geofence_radius_m, geofence_enforced').order('project_name'),
       supabase.from('contractors').select('id, company_name, contact_name, email, status').order('company_name')
     ]);
-    if (settings) setRetentionDays(settings.project_default_retention_days);
-    setProjects((proj ?? []) as Project[]);
-    setContractors((cont ?? []) as Contractor[]);
+    // Previously these errors were silently swallowed and the lists just
+    // fell back to empty — showing a blank Settings page with no indication
+    // anything had gone wrong. Surface them now.
+    const firstError = projRes.error ?? contRes.error ?? settingsRes.error;
+    if (firstError) {
+      setError(`Failed to load settings data: ${firstError.message}`);
+    }
+    if (settingsRes.data) setRetentionDays(settingsRes.data.project_default_retention_days);
+    setProjects((projRes.data ?? []) as Project[]);
+    setContractors((contRes.data ?? []) as Contractor[]);
   }
   useEffect(() => { load(); }, []);
 

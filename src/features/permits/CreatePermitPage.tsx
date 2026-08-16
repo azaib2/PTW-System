@@ -65,13 +65,22 @@ export default function CreatePermitPage() {
   const permitType = watch('permit_type');
 
   useEffect(() => {
-    supabase.from('projects').select('id, project_name').then(({ data }) => setProjects(data ?? []));
+    supabase.from('projects').select('id, project_name').then(({ data, error }) => {
+      if (error) setError(`Could not load projects: ${error.message}`);
+      setProjects(data ?? []);
+    });
     if (profile?.contractor_id) {
       supabase.from('contractors').select('id, company_name').eq('id', profile.contractor_id)
-        .then(({ data }) => setContractors(data ?? []));
+        .then(({ data, error }) => {
+          if (error) setError(`Could not load your contractor: ${error.message}`);
+          setContractors(data ?? []);
+        });
     } else {
       supabase.from('contractors').select('id, company_name').eq('status', 'active')
-        .then(({ data }) => setContractors(data ?? []));
+        .then(({ data, error }) => {
+          if (error) setError(`Could not load contractors: ${error.message}`);
+          setContractors(data ?? []);
+        });
     }
   }, [profile]);
 
