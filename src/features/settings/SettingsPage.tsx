@@ -94,6 +94,47 @@ export default function SettingsPage() {
     }
   }
 
+  async function deleteProject(p: Project) {
+    if (!window.confirm(`Delete project "${p.project_name}"? This cannot be undone.`)) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const { error } = await supabase.from('projects').delete().eq('id', p.id);
+      if (error) {
+        // Postgres FK violation — permits still reference this project
+        if (error.code === '23503') {
+          throw new Error(`Cannot delete "${p.project_name}" — permits already exist for this project. Remove/archive those first, or leave the project in place.`);
+        }
+        throw new Error(error.message);
+      }
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to delete project.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteContractor(c: Contractor) {
+    if (!window.confirm(`Delete contractor "${c.company_name}"? This cannot be undone.`)) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const { error } = await supabase.from('contractors').delete().eq('id', c.id);
+      if (error) {
+        if (error.code === '23503') {
+          throw new Error(`Cannot delete "${c.company_name}" — permits or users already reference this contractor. Deactivate it instead.`);
+        }
+        throw new Error(error.message);
+      }
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to delete contractor.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function useMyLocationForProject(projectId: string) {
     setSaving(true);
     setError(null);
@@ -154,9 +195,12 @@ export default function SettingsPage() {
         </p>
         {projects.map(p => (
           <div key={p.id} className="border-b border-slate-100 last:border-0 py-3 space-y-2">
-            <div className="flex justify-between text-sm">
+            <div className="flex justify-between items-center text-sm">
               <span className="font-medium">{p.project_name} <span className="text-xs text-slate-400">({p.project_number})</span></span>
-              <span className="text-xs text-slate-400">{p.retention_days}d retention</span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-400">{p.retention_days}d retention</span>
+                <button onClick={() => deleteProject(p)} disabled={saving} className="text-danger text-xs font-semibold disabled:opacity-60">Delete</button>
+              </div>
             </div>
             <div className="flex items-center justify-between text-xs">
               <span className="text-slate-500">
@@ -197,10 +241,13 @@ export default function SettingsPage() {
         {contractors.map(c => (
           <div key={c.id} className="flex items-center justify-between text-sm py-1.5 border-b border-slate-100 last:border-0">
             <span>{c.company_name}</span>
-            <button onClick={() => toggleContractorStatus(c)} disabled={saving}
-              className={`text-xs font-semibold px-2 py-1 rounded-full ${c.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-600'}`}>
-              {c.status}
-            </button>
+            <div className="flex items-center gap-2">
+              <button onClick={() => toggleContractorStatus(c)} disabled={saving}
+                className={`text-xs font-semibold px-2 py-1 rounded-full ${c.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-600'}`}>
+                {c.status}
+              </button>
+              <button onClick={() => deleteContractor(c)} disabled={saving} className="text-danger text-xs font-semibold disabled:opacity-60">Delete</button>
+            </div>
           </div>
         ))}
         <div className="flex gap-2 pt-2">
