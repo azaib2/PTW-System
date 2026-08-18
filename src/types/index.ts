@@ -73,9 +73,26 @@ export const PERMIT_PREFIX: Record<PermitType, string> = {
   work_at_height: 'WAH'
 };
 
-// Role -> capability matrix (mirrors the RLS policies; UI-layer convenience
+// Display label — kept separate from the DB enum value ('lifting') so the
+// underlying data/URLs/permit numbers don't change, only what's shown.
+export const PERMIT_TYPE_LABEL: Record<PermitType, string> = {
+  hot_work: 'Hot Work',
+  cold_work: 'Cold Work',
+  lifting: 'General Lifting',
+  general_work: 'General Work',
+  work_at_height: 'Working at Height'
+};
+
+// Role/permission matrix (mirrors the RLS policies; UI-layer convenience
 // only, never the actual security boundary).
 export const CAN_APPROVE: AppRole[] = [
   'lifting_supervisor', 'hse_officer', 'hse_manager', 'client_hse', 'permit_approver', 'administrator'
 ];
+
+// Two-step approval: a broader set of HSE-capable roles can VERIFY a
+// submitted permit (first review pass, moves it to under_review); only a
+// narrower set of final approvers can give the actual APPROVAL after that.
+export const CAN_VERIFY: AppRole[] = CAN_APPROVE;
+export const CAN_FINAL_APPROVE: AppRole[] = ['administrator', 'permit_approver', 'hse_manager'];
+
 export const CAN_MANAGE_USERS: AppRole[] = ['administrator'];

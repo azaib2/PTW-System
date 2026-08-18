@@ -42,7 +42,7 @@ export default function SearchPage() {
             <input className={inputClass} value={filters.craneId ?? ''} onChange={e => setFilters(f => ({ ...f, craneId: e.target.value }))} /></div>
           <div><label className={labelClass}>Permit Type</label>
             <select className={inputClass} value={filters.permitType ?? ''} onChange={e => setFilters(f => ({ ...f, permitType: (e.target.value || undefined) as any }))}>
-              <option value="">Any</option><option value="hot_work">Hot Work</option><option value="cold_work">Cold Work</option><option value="lifting">Lifting</option>
+              <option value="">Any</option><option value="hot_work">Hot Work</option><option value="cold_work">Cold Work</option><option value="lifting">General Lifting</option><option value="general_work">General Work</option><option value="work_at_height">Working at Height</option>
             </select></div>
           <div><label className={labelClass}>Status</label>
             <select className={inputClass} value={filters.status ?? ''} onChange={e => setFilters(f => ({ ...f, status: (e.target.value || undefined) as any }))}>

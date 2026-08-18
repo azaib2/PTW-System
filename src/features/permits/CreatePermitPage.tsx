@@ -164,7 +164,7 @@ export default function CreatePermitPage() {
             <select {...register('permit_type', { required: true })} className={inputClass}>
               <option value="hot_work">Hot Work</option>
               <option value="cold_work">Cold Work</option>
-              <option value="lifting">Lifting</option>
+              <option value="lifting">General Lifting</option>
               <option value="general_work">General Work</option>
               <option value="work_at_height">Working at Height</option>
             </select>

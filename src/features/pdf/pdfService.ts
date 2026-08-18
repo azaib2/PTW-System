@@ -169,7 +169,7 @@ export async function generateLiftingPackagePdf(permitId: string) {
   const ctx = await initDoc(permit.permit_number);
 
   // Page 1: Lifting PTW
-  sectionTitle(ctx, 'Lifting Permit to Work');
+  sectionTitle(ctx, 'General Lifting Permit to Work');
   fieldLine(ctx, 'Status', permit.status.toUpperCase());
   if (permit.is_critical_lift) fieldLine(ctx, 'Critical Lift', 'YES');
   fieldLine(ctx, 'Location', permit.location);

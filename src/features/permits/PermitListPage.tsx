@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { fetchPermits } from './permitService';
 import StatusBadge from '@/components/StatusBadge';
+import { PERMIT_TYPE_LABEL } from '@/types';
 import type { Permit, PermitStatus } from '@/types';
 
 export default function PermitListPage({ title, statuses }: { title: string; statuses: PermitStatus[] }) {
@@ -81,7 +82,7 @@ export default function PermitListPage({ title, statuses }: { title: string; sta
             {permits.map(p => (
               <tr key={p.id} onClick={() => window.location.assign(`/permits/${p.id}`)} className="border-t border-slate-100 hover:bg-slate-50 cursor-pointer">
                 <td className="px-4 py-2.5 font-medium text-navy">{p.permit_number}</td>
-                <td className="px-4 py-2.5 capitalize">{p.permit_type.replace('_', ' ')}</td>
+                <td className="px-4 py-2.5">{PERMIT_TYPE_LABEL[p.permit_type]}</td>
                 <td className="px-4 py-2.5">{p.activity}</td>
                 <td className="px-4 py-2.5">{p.location}</td>
                 <td className="px-4 py-2.5">{p.expiry_time ? format(new Date(p.expiry_time), 'dd MMM HH:mm') : '—'}</td>

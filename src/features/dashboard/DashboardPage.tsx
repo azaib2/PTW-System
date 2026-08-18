@@ -57,7 +57,7 @@ export default function DashboardPage() {
   const quickActions = [
     { to: '/permits/new?type=hot_work', label: 'Create Hot Work', icon: Flame },
     { to: '/permits/new?type=cold_work', label: 'Create Cold Work', icon: Snowflake },
-    { to: '/permits/new?type=lifting', label: 'Create Lifting', icon: Weight },
+    { to: '/permits/new?type=lifting', label: 'Create General Lifting', icon: Weight },
     { to: '/permits/new?type=general_work', label: 'Create General Work', icon: FileText },
     { to: '/permits/new?type=work_at_height', label: 'Create Work at Height', icon: ArrowUp },
     { to: '/lifting/plans/new', label: 'Create Lifting Plan', icon: AlertTriangle },

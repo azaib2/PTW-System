@@ -2,6 +2,10 @@ import { supabase } from '@/lib/supabase';
 import { PERMIT_PREFIX, type Permit, type PermitType } from '@/types';
 import { CONTROLS_BY_TYPE } from './controlDefs';
 import { getCurrentLocation } from '@/lib/geolocation';
+import { computeCriticalLift } from './criticalLift';
+import { checkLiftingPackageComplete } from '@/features/lifting/liftingService';
+
+export { computeCriticalLift } from './criticalLift';
 
 export interface CreatePermitInput {
   permit_type: PermitType;
@@ -82,8 +86,8 @@ export async function createPermit(input: CreatePermitInput) {
   }
 
   const permit_number = await generatePermitNumber(input.permit_type);
-  const isCritical = input.permit_type === 'lifting' && input.critical_lift_answers
-    ? Object.values(input.critical_lift_answers).some(Boolean)
+  const isCritical = input.permit_type === 'lifting'
+    ? computeCriticalLift(input.load_weight_ton, input.rated_capacity_ton, input.critical_lift_answers)
     : false;
 
   const { data: permit, error } = await supabase
@@ -118,6 +122,22 @@ export async function submitPermit(permitId: string, userId: string) {
   if (fetchErr) throw new Error(fetchErr.message);
   const missing = findMissingMandatoryFields(permit as Permit);
   if (missing.length) throw new Error(`Cannot submit — missing required fields: ${missing.join(', ')}`);
+
+  // Documents/certificates are mandatory before a permit can be submitted.
+  const { count: attachmentCount } = await supabase.from('permit_attachments')
+    .select('id', { count: 'exact', head: true }).eq('permit_id', permitId);
+  if (!attachmentCount) {
+    throw new Error('Cannot submit — at least one supporting document or certificate must be attached first.');
+  }
+
+  // Lifting permits additionally require the full lifting package to be
+  // complete before submission — not deferred to field verification time.
+  if (permit.permit_type === 'lifting') {
+    const missingPackage = await checkLiftingPackageComplete(permit as Permit);
+    if (missingPackage.length) {
+      throw new Error(`Cannot submit — the following must be completed first: ${missingPackage.join(', ')}.`);
+    }
+  }
 
   const { error } = await supabase
     .from('permits')

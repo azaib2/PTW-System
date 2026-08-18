@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { CRANE_CHECKLIST_ITEMS, SITE_PREPARATION_ITEMS, RIGGING_ITEMS, DEFAULT_LIFT_SEQUENCE } from './checklistDefs';
+import { computeCriticalLift, escalateToCriticalIfNeeded } from '@/features/permits/criticalLift';
 
 // ---------------------------------------------------------------------
 // Lifting Plan
@@ -41,6 +42,12 @@ export async function createLiftingPlan(input: LiftingPlanInput, steps: string[]
   if (input.linked_permit_id) {
     const { error: linkErr } = await supabase.from('permits').update({ lifting_plan_id: plan.id }).eq('id', input.linked_permit_id);
     if (linkErr) throw new Error(`Plan created but linking to permit failed: ${linkErr.message}`);
+
+    // The lifting plan often has more precise load/capacity numbers than
+    // the initial permit form — recheck the 75% critical-lift threshold
+    // against the plan's own figures now that it exists.
+    const isCritical = computeCriticalLift(input.load_weight_ton, input.rated_capacity_ton);
+    await escalateToCriticalIfNeeded(input.linked_permit_id, isCritical);
   }
   return plan;
 }
@@ -225,3 +232,44 @@ export async function fetchLatestFieldVerification(permitId: string) {
   if (error) throw new Error(error.message);
   return data;
 }
+
+// ---------------------------------------------------------------------
+// Lifting package completeness gate: a lifting permit cannot be submitted
+// until every prerequisite step has actually been completed, not just
+// checked off later during field verification.
+// ---------------------------------------------------------------------
+export async function checkLiftingPackageComplete(permit: { id: string; lifting_plan_id: string | null }): Promise<string[]> {
+  const missing: string[] = [];
+
+  if (!permit.lifting_plan_id) {
+    missing.push('Lifting Plan');
+  }
+
+  const [{ data: crane }, { data: site }, { data: rigging }, { data: competency }, { data: fieldVerifications }] = await Promise.all([
+    supabase.from('crane_checklists').select('result').eq('permit_id', permit.id).order('created_at', { ascending: false }).limit(1),
+    supabase.from('site_preparation_checklists').select('result').eq('permit_id', permit.id).order('created_at', { ascending: false }).limit(1),
+    supabase.from('rigging_verifications').select('result').eq('permit_id', permit.id).order('created_at', { ascending: false }).limit(1),
+    supabase.from('competency_documents').select('person_role, status').eq('permit_id', permit.id),
+    supabase.from('field_verifications').select('id').eq('permit_id', permit.id).order('created_at', { ascending: false }).limit(1)
+  ]);
+
+  if (!crane?.[0]?.result) missing.push('Crane Checklist');
+  if (!site?.[0]?.result) missing.push('Site Preparation Checklist');
+  if (!rigging?.[0]?.result) missing.push('Rigging Verification');
+
+  const requiredRoles = ['crane_operator', 'lifting_supervisor', 'rigger', 'signalman'];
+  const coveredRoles = new Set((competency ?? []).filter(c => c.status !== 'expired').map(c => c.person_role));
+  const missingRoles = requiredRoles.filter(r => !coveredRoles.has(r));
+  if (missingRoles.length) missing.push(`Competency Verification (missing/expired: ${missingRoles.join(', ')})`);
+
+  if (!fieldVerifications?.[0]) {
+    missing.push('HSE Field Verification');
+  } else {
+    const { count } = await supabase.from('permit_photos').select('id', { count: 'exact', head: true })
+      .eq('permit_id', permit.id).eq('related_table', 'field_verification');
+    if (!count) missing.push('Field Verification photo evidence');
+  }
+
+  return missing;
+}
+

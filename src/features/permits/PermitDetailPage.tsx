@@ -14,7 +14,7 @@ import {
   fetchPermit, fetchPermitControls, fetchPermitApprovals,
   updatePermitControl, submitPermit, approvePermit, rejectPermit, startReview
 } from './permitService';
-import { CAN_APPROVE, type Permit } from '@/types';
+import { CAN_VERIFY, CAN_FINAL_APPROVE, PERMIT_TYPE_LABEL, type Permit } from '@/types';
 
 interface ControlRow { id: string; control_key: string; control_label: string; is_checked: boolean; remarks: string | null; }
 interface ApprovalRow { id: string; action: string; remarks: string | null; created_at: string; actor: { full_name: string; role: string } | null; }
@@ -96,8 +96,9 @@ export default function PermitDetailPage() {
   if (error && !permit) return <div className="rounded-lg bg-red-50 border border-danger text-red-800 text-sm p-3">{error}</div>;
   if (!permit || !profile) return null;
 
-  const canApprove = CAN_APPROVE.includes(profile.role) && profile.id !== permit.created_by;
-  const isSelfApprovalBlocked = CAN_APPROVE.includes(profile.role) && profile.id === permit.created_by;
+  const canVerify = CAN_VERIFY.includes(profile.role) && profile.id !== permit.created_by;
+  const canFinalApprove = CAN_FINAL_APPROVE.includes(profile.role) && profile.id !== permit.created_by;
+  const isSelfApprovalBlocked = (CAN_VERIFY.includes(profile.role) || CAN_FINAL_APPROVE.includes(profile.role)) && profile.id === permit.created_by;
   const canSubmit = permit.status === 'draft' && (profile.id === permit.created_by || profile.contractor_id === permit.contractor_id);
   const checkedCount = controls.filter(c => c.is_checked).length;
 
@@ -108,7 +109,7 @@ export default function PermitDetailPage() {
         <div className="flex items-start justify-between">
           <div>
             <div className="font-bold text-navy text-base">{permit.permit_number}</div>
-            <div className="text-xs text-slate-500 uppercase tracking-wide">{permit.permit_type.replace('_', ' ')}</div>
+            <div className="text-xs text-slate-500 uppercase tracking-wide">{PERMIT_TYPE_LABEL[permit.permit_type]}</div>
           </div>
           <StatusBadge status={permit.status} />
         </div>
@@ -206,20 +207,20 @@ export default function PermitDetailPage() {
       {/* Actions */}
       <div className="sticky bottom-16 md:bottom-0 bg-bgapp py-3 -mx-4 px-4 border-t border-slate-200 space-y-2">
         {canSubmit && (
-          <button disabled={actionBusy} onClick={() => runAction(() => submitPermit(permit.id, profile.id))}
+          <button disabled={actionBusy} onClick={() => setPendingAction({ label: 'submit this permit for review', fn: () => submitPermit(permit.id, profile.id) })}
             className="w-full bg-brand text-white font-semibold py-3.5 rounded-lg disabled:opacity-60">
             Submit for Review
           </button>
         )}
 
-        {permit.status === 'submitted' && canApprove && (
-          <button disabled={actionBusy} onClick={() => runAction(() => startReview(permit.id, profile.id))}
+        {permit.status === 'submitted' && canVerify && (
+          <button disabled={actionBusy} onClick={() => setPendingAction({ label: 'verify and accept this permit', fn: () => startReview(permit.id, profile.id) })}
             className="w-full bg-slate-700 text-white font-semibold py-3 rounded-lg disabled:opacity-60">
-            Start Review
+            Verify & Accept
           </button>
         )}
 
-        {(permit.status === 'submitted' || permit.status === 'under_review') && canApprove && (
+        {permit.status === 'under_review' && canFinalApprove && (
           <div className="flex gap-2">
             <button disabled={actionBusy} onClick={() => setPendingAction({ label: 'approve this permit', fn: () => approvePermit(permit.id, profile.id, permit.created_by) })}
               className="flex-1 bg-success text-white font-semibold py-3.5 rounded-lg disabled:opacity-60">
