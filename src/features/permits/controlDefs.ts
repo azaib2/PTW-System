@@ -56,7 +56,7 @@ export const LIFTING_CONTROLS: ControlDef[] = [
 
 export const CRITICAL_LIFT_QUESTIONS: { key: string; label: string }[] = [
   { key: 'tandem_lift', label: 'Tandem lift?' },
-  { key: 'personnel_lifting', label: 'Personnel lifting?' },
+  { key: 'personnel_lifting', label: 'General lifting?' },
   { key: 'near_live_electrical', label: 'Near live electrical equipment?' },
   { key: 'restricted_access', label: 'Restricted access?' },
   { key: 'complex_unusual_load', label: 'Complex/unusual load?' },
