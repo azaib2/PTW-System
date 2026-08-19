@@ -5,7 +5,7 @@ import ReAuthModal from '@/features/auth/ReAuthModal';
 import { CAN_APPROVE, type Permit } from '@/types';
 import {
   SUSPENSION_REASONS, startPermit, suspendPermit, fetchLatestSuspension, resumePermit,
-  requestExtension, fetchExtensions, decideExtension, completePermit, closePermit, type ClosureChecklist
+  requestExtension, fetchExtensions, decideExtension, completePermit, closePermit, cancelPermit, type ClosureChecklist
 } from './fieldControlService';
 
 interface Suspension { id: string; reason: string; remarks: string; suspended_at: string; }
@@ -17,7 +17,7 @@ export default function FieldControlPanel({ permit, onUpdate }: { permit: Permit
   const { profile } = useAuth();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [panel, setPanel] = useState<'none' | 'suspend' | 'resume' | 'extend' | 'complete' | 'close'>('none');
+  const [panel, setPanel] = useState<'none' | 'suspend' | 'resume' | 'extend' | 'complete' | 'close' | 'cancel'>('none');
 
   const [suspension, setSuspension] = useState<Suspension | null>(null);
   const [extensions, setExtensions] = useState<Extension[]>([]);
@@ -34,7 +34,8 @@ export default function FieldControlPanel({ permit, onUpdate }: { permit: Permit
     residual_hazards_removed: false, barricades_removed: false
   });
   const [closeRemarks, setCloseRemarks] = useState('');
-  const [pendingAction, setPendingAction] = useState<{ label: string; fn: () => Promise<void> } | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [pendingAction, setPendingAction] = useState<{ label: string; fn: () => Promise<void>; requirePhoto: boolean } | null>(null);
 
   useEffect(() => {
     if (permit.status === 'suspended') fetchLatestSuspension(permit.id).then(setSuspension).catch(() => {});
@@ -59,10 +60,11 @@ export default function FieldControlPanel({ permit, onUpdate }: { permit: Permit
   }
 
   const canOperate = CAN_APPROVE.includes(profile.role); // HSE-capable roles handle field control actions
+  const isAdmin = profile.role === 'administrator';
   const pendingExtension = extensions.find(e => e.status === 'pending');
 
-  function requireReauth(label: string, fn: () => Promise<void>) {
-    setPendingAction({ label, fn });
+  function requireReauth(label: string, fn: () => Promise<void>, requirePhoto = true) {
+    setPendingAction({ label, fn, requirePhoto });
   }
 
   return (
@@ -77,13 +79,24 @@ export default function FieldControlPanel({ permit, onUpdate }: { permit: Permit
         </button>
       )}
 
-      {/* ACTIVE -> Suspend / Extend / Complete */}
+      {/* ACTIVE -> Suspend (admin only) / Cancel (admin only) / Extend / Complete */}
       {(permit.status === 'active' || permit.status === 'expiring_soon') && (
         <>
-          <button disabled={busy} onClick={() => setPanel(panel === 'suspend' ? 'none' : 'suspend')}
-            className="w-full bg-slate-700 text-white font-semibold py-3.5 rounded-lg disabled:opacity-60">
-            🛑 SUSPEND PERMIT
-          </button>
+          {isAdmin && (
+            <div className="flex gap-2">
+              <button disabled={busy} onClick={() => setPanel(panel === 'suspend' ? 'none' : 'suspend')}
+                className="flex-1 bg-slate-700 text-white font-semibold py-3.5 rounded-lg disabled:opacity-60">
+                🛑 SUSPEND PERMIT
+              </button>
+              <button disabled={busy} onClick={() => setPanel(panel === 'cancel' ? 'none' : 'cancel')}
+                className="flex-1 bg-danger text-white font-semibold py-3.5 rounded-lg disabled:opacity-60">
+                Cancel Permit
+              </button>
+            </div>
+          )}
+          {!isAdmin && (
+            <div className="text-center text-xs text-slate-400 py-1">Only an administrator can suspend or cancel a permit.</div>
+          )}
           <div className="flex gap-2">
             <button disabled={busy} onClick={() => setPanel(panel === 'extend' ? 'none' : 'extend')}
               className="flex-1 bg-warning text-white font-semibold py-3 rounded-lg disabled:opacity-60">
@@ -103,11 +116,23 @@ export default function FieldControlPanel({ permit, onUpdate }: { permit: Permit
             {SUSPENSION_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
           </select>
           <textarea value={suspendRemarks} onChange={e => setSuspendRemarks(e.target.value)}
-            placeholder="Remarks (required)" className={inputClass} rows={2} />
+            placeholder="Remarks for the requestor — what needs to change (required)" className={inputClass} rows={2} />
           <button disabled={busy || !suspendRemarks.trim()}
-            onClick={() => requireReauth('suspend this permit', () => suspendPermit(permit.id, profile.id, suspendReason, suspendRemarks, permit.status))}
+            onClick={() => requireReauth('suspend this permit', () => suspendPermit(permit.id, profile.id, suspendReason, suspendRemarks, permit.status), false)}
             className="w-full bg-danger text-white font-semibold py-2.5 rounded-lg disabled:opacity-60">
             Confirm Suspension
+          </button>
+        </div>
+      )}
+
+      {panel === 'cancel' && (
+        <div className="bg-white rounded-lg p-3 space-y-2 border border-danger">
+          <textarea value={cancelReason} onChange={e => setCancelReason(e.target.value)}
+            placeholder="Reason for cancellation — comments for the requestor (required)" className={inputClass} rows={2} />
+          <button disabled={busy || !cancelReason.trim()}
+            onClick={() => requireReauth('cancel this permit', () => cancelPermit(permit.id, profile.id, cancelReason, permit.status), false)}
+            className="w-full bg-danger text-white font-semibold py-2.5 rounded-lg disabled:opacity-60">
+            Confirm Cancellation
           </button>
         </div>
       )}
@@ -240,6 +265,7 @@ export default function FieldControlPanel({ permit, onUpdate }: { permit: Permit
         <ReAuthModal
           actionLabel={pendingAction.label}
           permitId={permit.id}
+          requirePhoto={pendingAction.requirePhoto}
           onCancel={() => setPendingAction(null)}
           onConfirmed={() => { const action = pendingAction; setPendingAction(null); run(action.fn); }}
         />

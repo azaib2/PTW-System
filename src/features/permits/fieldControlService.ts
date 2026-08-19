@@ -70,6 +70,18 @@ export async function resumePermit(suspensionId: string, permitId: string, userI
 }
 
 // ---------------------------------------------------------------------
+// Cancel (administrator only) — like suspend/reject, returns the permit to
+// the requestor with comments rather than deleting it. RLS lets the
+// contractor edit and resubmit while status = 'cancelled'.
+// ---------------------------------------------------------------------
+export async function cancelPermit(permitId: string, userId: string, reason: string, currentStatus: string) {
+  if (!reason.trim()) throw new Error('A reason is required to cancel a permit.');
+  const { error } = await supabase.from('permits').update({ status: 'cancelled' }).eq('id', permitId);
+  if (error) throw new Error(error.message);
+  await logAudit('permits', permitId, 'cancelled', currentStatus, 'cancelled', reason);
+}
+
+// ---------------------------------------------------------------------
 // Extension (section 28) — never auto-extends; requires separate approval
 // ---------------------------------------------------------------------
 export async function requestExtension(permitId: string, userId: string, reason: string, currentExpiry: string, requestedNewExpiry: string) {

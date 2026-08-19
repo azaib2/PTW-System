@@ -123,11 +123,14 @@ export async function submitPermit(permitId: string, userId: string) {
   const missing = findMissingMandatoryFields(permit as Permit);
   if (missing.length) throw new Error(`Cannot submit — missing required fields: ${missing.join(', ')}`);
 
-  // Documents/certificates are mandatory before a permit can be submitted.
-  const { count: attachmentCount } = await supabase.from('permit_attachments')
-    .select('id', { count: 'exact', head: true }).eq('permit_id', permitId);
-  if (!attachmentCount) {
-    throw new Error('Cannot submit — at least one supporting document or certificate must be attached first.');
+  // Documents/certificates are mandatory before submission — lifting permits
+  // only; other permit types don't require an attachment to submit.
+  if (permit.permit_type === 'lifting') {
+    const { count: attachmentCount } = await supabase.from('permit_attachments')
+      .select('id', { count: 'exact', head: true }).eq('permit_id', permitId);
+    if (!attachmentCount) {
+      throw new Error('Cannot submit — at least one supporting document or certificate must be attached first.');
+    }
   }
 
   // Lifting permits additionally require the full lifting package to be

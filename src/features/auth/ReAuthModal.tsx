@@ -6,13 +6,14 @@ import { uploadPhoto } from '@/features/documents/documentService';
 interface Props {
   actionLabel: string;
   permitId: string;
+  requirePhoto?: boolean; // some actions (verify/suspend) exempt administrators from the photo step
   onConfirmed: () => void;
   onCancel: () => void;
 }
 
 type Step = 'password' | 'camera';
 
-export default function ReAuthModal({ actionLabel, permitId, onConfirmed, onCancel }: Props) {
+export default function ReAuthModal({ actionLabel, permitId, requirePhoto = true, onConfirmed, onCancel }: Props) {
   const { profile } = useAuth();
   const [step, setStep] = useState<Step>('password');
   const [password, setPassword] = useState('');
@@ -52,6 +53,10 @@ export default function ReAuthModal({ actionLabel, permitId, onConfirmed, onCanc
     setBusy(false);
     if (error) {
       setError('Incorrect password.');
+      return;
+    }
+    if (!requirePhoto) {
+      onConfirmed();
       return;
     }
     setStep('camera');
@@ -108,7 +113,11 @@ export default function ReAuthModal({ actionLabel, permitId, onConfirmed, onCanc
         {step === 'password' && (
           <>
             <h2 className="text-sm font-semibold text-slate-700">Confirm your password to {actionLabel}</h2>
-            <p className="text-xs text-slate-500">For accountability, this action requires your password and a live photo. Never share your login with anyone else.</p>
+            <p className="text-xs text-slate-500">
+              {requirePhoto
+                ? 'For accountability, this action requires your password and a live photo. Never share your login with anyone else.'
+                : 'For accountability, this action requires your password. Never share your login with anyone else.'}
+            </p>
             <input type="password" autoFocus value={password} onChange={e => setPassword(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && confirmPassword()}
               placeholder="Password" className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-base" />

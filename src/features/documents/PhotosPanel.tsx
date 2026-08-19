@@ -66,7 +66,7 @@ export default function PhotosPanel({ permitId, disabled }: { permitId: string; 
 
       {!disabled && (
         <div className="pt-2 border-t border-slate-100 space-y-2">
-          <input placeholder="Caption (e.g. Outrigger setup)" value={caption} onChange={e => setCaption(e.target.value)}
+          <input placeholder="Provide photo for site verification" value={caption} onChange={e => setCaption(e.target.value)}
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
           <input ref={fileRef} type="file" accept="image/*" capture="environment"
             onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])}

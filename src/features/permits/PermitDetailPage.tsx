@@ -32,7 +32,7 @@ export default function PermitDetailPage() {
   const [pdfBusy, setPdfBusy] = useState(false);
   const [rejectRemarks, setRejectRemarks] = useState('');
   const [showRejectBox, setShowRejectBox] = useState(false);
-  const [pendingAction, setPendingAction] = useState<{ label: string; fn: () => Promise<void> } | null>(null);
+  const [pendingAction, setPendingAction] = useState<{ label: string; fn: () => Promise<void>; requirePhoto: boolean } | null>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -99,7 +99,8 @@ export default function PermitDetailPage() {
   const canVerify = CAN_VERIFY.includes(profile.role) && profile.id !== permit.created_by;
   const canFinalApprove = CAN_FINAL_APPROVE.includes(profile.role) && profile.id !== permit.created_by;
   const isSelfApprovalBlocked = (CAN_VERIFY.includes(profile.role) || CAN_FINAL_APPROVE.includes(profile.role)) && profile.id === permit.created_by;
-  const canSubmit = permit.status === 'draft' && (profile.id === permit.created_by || profile.contractor_id === permit.contractor_id);
+  const canSubmit = ['draft', 'rejected', 'suspended', 'cancelled'].includes(permit.status)
+    && (profile.id === permit.created_by || profile.contractor_id === permit.contractor_id);
   const checkedCount = controls.filter(c => c.is_checked).length;
 
   return (
@@ -207,14 +208,14 @@ export default function PermitDetailPage() {
       {/* Actions */}
       <div className="sticky bottom-16 md:bottom-0 bg-bgapp py-3 -mx-4 px-4 border-t border-slate-200 space-y-2">
         {canSubmit && (
-          <button disabled={actionBusy} onClick={() => setPendingAction({ label: 'submit this permit for review', fn: () => submitPermit(permit.id, profile.id) })}
+          <button disabled={actionBusy} onClick={() => setPendingAction({ label: 'submit this permit for review', fn: () => submitPermit(permit.id, profile.id), requirePhoto: true })}
             className="w-full bg-brand text-white font-semibold py-3.5 rounded-lg disabled:opacity-60">
-            Submit for Review
+            {['rejected', 'suspended', 'cancelled'].includes(permit.status) ? 'Resubmit for Review' : 'Submit for Review'}
           </button>
         )}
 
         {permit.status === 'submitted' && canVerify && (
-          <button disabled={actionBusy} onClick={() => setPendingAction({ label: 'verify and accept this permit', fn: () => startReview(permit.id, profile.id) })}
+          <button disabled={actionBusy} onClick={() => setPendingAction({ label: 'verify and accept this permit', fn: () => startReview(permit.id, profile.id), requirePhoto: profile.role !== 'administrator' })}
             className="w-full bg-slate-700 text-white font-semibold py-3 rounded-lg disabled:opacity-60">
             Verify & Accept
           </button>
@@ -222,7 +223,7 @@ export default function PermitDetailPage() {
 
         {permit.status === 'under_review' && canFinalApprove && (
           <div className="flex gap-2">
-            <button disabled={actionBusy} onClick={() => setPendingAction({ label: 'approve this permit', fn: () => approvePermit(permit.id, profile.id, permit.created_by) })}
+            <button disabled={actionBusy} onClick={() => setPendingAction({ label: 'approve this permit', fn: () => approvePermit(permit.id, profile.id, permit.created_by), requirePhoto: true })}
               className="flex-1 bg-success text-white font-semibold py-3.5 rounded-lg disabled:opacity-60">
               Approve
             </button>
@@ -233,14 +234,23 @@ export default function PermitDetailPage() {
           </div>
         )}
 
+        {/* Administrator and HSE Manager can reject at the first stage too, without waiting for a verifier */}
+        {permit.status === 'submitted' && !canFinalApprove && ['administrator', 'hse_manager'].includes(profile.role) && profile.id !== permit.created_by && (
+          <button disabled={actionBusy} onClick={() => setShowRejectBox(v => !v)}
+            className="w-full bg-danger text-white font-semibold py-3 rounded-lg disabled:opacity-60">
+            Reject
+          </button>
+        )}
+
         {showRejectBox && (
           <div className="bg-white rounded-lg p-3 space-y-2 border border-danger">
             <textarea value={rejectRemarks} onChange={e => setRejectRemarks(e.target.value)}
-              placeholder="Reason for rejection (required)" className="w-full border border-slate-300 rounded-lg p-2 text-sm" rows={2} />
+              placeholder="Reason for rejection — comments for the requestor (required)" className="w-full border border-slate-300 rounded-lg p-2 text-sm" rows={2} />
             <button disabled={actionBusy || !rejectRemarks.trim()}
               onClick={() => setPendingAction({
                 label: 'reject this permit',
-                fn: () => rejectPermit(permit.id, profile.id, rejectRemarks).then(() => { setShowRejectBox(false); setRejectRemarks(''); })
+                fn: () => rejectPermit(permit.id, profile.id, rejectRemarks).then(() => { setShowRejectBox(false); setRejectRemarks(''); }),
+                requirePhoto: true
               })}
               className="w-full bg-danger text-white font-semibold py-2.5 rounded-lg disabled:opacity-60">
               Confirm Rejection
@@ -262,6 +272,7 @@ export default function PermitDetailPage() {
         <ReAuthModal
           actionLabel={pendingAction.label}
           permitId={permit.id}
+          requirePhoto={pendingAction.requirePhoto}
           onCancel={() => setPendingAction(null)}
           onConfirmed={() => { const action = pendingAction; setPendingAction(null); runAction(action.fn); }}
         />
