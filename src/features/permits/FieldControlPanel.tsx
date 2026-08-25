@@ -79,7 +79,7 @@ export default function FieldControlPanel({ permit, onUpdate }: { permit: Permit
         </button>
       )}
 
-      {/* ACTIVE -> Suspend (admin only) / Cancel (admin only) / Extend / Complete */}
+      {/* ACTIVE -> Suspend (admin only) / Cancel (admin only) / Complete */}
       {(permit.status === 'active' || permit.status === 'expiring_soon') && (
         <>
           {isAdmin && (
@@ -97,16 +97,27 @@ export default function FieldControlPanel({ permit, onUpdate }: { permit: Permit
           {!isAdmin && (
             <div className="text-center text-xs text-slate-400 py-1">Only an administrator can suspend or cancel a permit.</div>
           )}
-          <div className="flex gap-2">
-            <button disabled={busy} onClick={() => setPanel(panel === 'extend' ? 'none' : 'extend')}
-              className="flex-1 bg-warning text-white font-semibold py-3 rounded-lg disabled:opacity-60">
-              Request Extension
-            </button>
-            <button disabled={busy} onClick={() => setPanel(panel === 'complete' ? 'none' : 'complete')}
-              className="flex-1 bg-brand text-white font-semibold py-3 rounded-lg disabled:opacity-60">
-              Complete
-            </button>
-          </div>
+          <button disabled={busy} onClick={() => setPanel(panel === 'complete' ? 'none' : 'complete')}
+            className="w-full bg-brand text-white font-semibold py-3 rounded-lg disabled:opacity-60">
+            Complete
+          </button>
+        </>
+      )}
+
+      {/* Extension can be requested while active/expiring, AND after a
+          permit has already expired — approving it revives the permit with
+          a new expiry rather than leaving it stuck as permanently expired. */}
+      {['active', 'expiring_soon', 'expired'].includes(permit.status) && (
+        <>
+          {permit.status === 'expired' && (
+            <div className="rounded-lg bg-red-50 border border-danger text-red-800 text-xs p-2 text-center">
+              This permit has expired. Requesting an extension and getting it approved will reactivate it with a new expiry time.
+            </div>
+          )}
+          <button disabled={busy} onClick={() => setPanel(panel === 'extend' ? 'none' : 'extend')}
+            className="w-full bg-warning text-white font-semibold py-3 rounded-lg disabled:opacity-60">
+            Request Extension
+          </button>
         </>
       )}
 

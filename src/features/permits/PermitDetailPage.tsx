@@ -4,6 +4,7 @@ import { fetchLatestFieldVerification } from '@/features/lifting/liftingService'
 import { format } from 'date-fns';
 import { useAuth } from '@/features/auth/AuthContext';
 import StatusBadge from '@/components/StatusBadge';
+import { getEffectiveStatus } from '@/lib/permitStatus';
 import FieldControlPanel from './FieldControlPanel';
 import AttachmentsPanel from '@/features/documents/AttachmentsPanel';
 import PhotosPanel from '@/features/documents/PhotosPanel';
@@ -112,7 +113,7 @@ export default function PermitDetailPage() {
             <div className="font-bold text-navy text-base">{permit.permit_number}</div>
             <div className="text-xs text-slate-500 uppercase tracking-wide">{PERMIT_TYPE_LABEL[permit.permit_type]}</div>
           </div>
-          <StatusBadge status={permit.status} />
+          <StatusBadge status={getEffectiveStatus(permit.status, permit.expiry_time)} />
         </div>
         <button onClick={downloadPdf} disabled={pdfBusy}
           className="w-full text-sm bg-slate-50 hover:bg-slate-100 rounded-lg py-2.5 font-medium text-slate-700 disabled:opacity-60">
@@ -259,7 +260,7 @@ export default function PermitDetailPage() {
         )}
 
         {permit.status === 'approved' || permit.status === 'active' || permit.status === 'expiring_soon'
-          || permit.status === 'suspended' || permit.status === 'completed' ? (
+          || permit.status === 'suspended' || permit.status === 'completed' || permit.status === 'expired' ? (
           <FieldControlPanel permit={permit} onUpdate={load} />
         ) : null}
       </div>

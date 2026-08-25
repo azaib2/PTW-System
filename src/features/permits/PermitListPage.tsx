@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import { fetchPermits } from './permitService';
 import StatusBadge from '@/components/StatusBadge';
 import { PERMIT_TYPE_LABEL } from '@/types';
+import { getEffectiveStatus } from '@/lib/permitStatus';
 import type { Permit, PermitStatus } from '@/types';
 
 export default function PermitListPage({ title, statuses }: { title: string; statuses: PermitStatus[] }) {
@@ -56,7 +57,7 @@ export default function PermitListPage({ title, statuses }: { title: string; sta
           <Link key={p.id} to={`/permits/${p.id}`} className="block bg-white rounded-xl shadow-sm p-3.5">
             <div className="flex items-center justify-between mb-1">
               <span className="font-semibold text-navy text-sm">{p.permit_number}</span>
-              <StatusBadge status={p.status} />
+              <StatusBadge status={getEffectiveStatus(p.status, p.expiry_time)} />
             </div>
             <div className="text-sm text-slate-600">{p.activity}</div>
             <div className="text-xs text-slate-400 mt-1">{p.location} · {p.expiry_time ? format(new Date(p.expiry_time), 'dd MMM HH:mm') : 'no expiry set'}</div>
@@ -86,7 +87,7 @@ export default function PermitListPage({ title, statuses }: { title: string; sta
                 <td className="px-4 py-2.5">{p.activity}</td>
                 <td className="px-4 py-2.5">{p.location}</td>
                 <td className="px-4 py-2.5">{p.expiry_time ? format(new Date(p.expiry_time), 'dd MMM HH:mm') : '—'}</td>
-                <td className="px-4 py-2.5"><StatusBadge status={p.status} /></td>
+                <td className="px-4 py-2.5"><StatusBadge status={getEffectiveStatus(p.status, p.expiry_time)} /></td>
               </tr>
             ))}
           </tbody>

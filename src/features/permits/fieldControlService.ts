@@ -108,7 +108,12 @@ export async function decideExtension(extensionId: string, permitId: string, use
   if (error) throw new Error(error.message);
 
   if (approve && newExpiry) {
-    const { error: permitErr } = await supabase.from('permits').update({ expiry_time: newExpiry }).eq('id', permitId);
+    // An approved extension always brings the permit back to active with
+    // the new expiry — including reviving one that had already expired,
+    // which is the whole point of allowing an extension request after
+    // expiry rather than only while still running.
+    const { error: permitErr } = await supabase.from('permits')
+      .update({ expiry_time: newExpiry, status: 'active' }).eq('id', permitId);
     if (permitErr) throw new Error(permitErr.message);
   }
   await logAudit('permits', permitId, approve ? 'extension_approved' : 'extension_rejected', null, null, null);

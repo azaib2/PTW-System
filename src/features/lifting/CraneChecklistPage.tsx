@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { useAuth } from '@/features/auth/AuthContext';
+import { supabase } from '@/lib/supabase';
 import {
   createCraneChecklist, fetchCraneChecklistItems, toggleCraneChecklistItem,
   computeCraneResult, finalizeCraneChecklist
@@ -22,11 +23,43 @@ export default function CraneChecklistPage() {
   const [correctiveAction, setCorrectiveAction] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const { register, handleSubmit } = useForm<FormValues>();
+  const [loadingDefaults, setLoadingDefaults] = useState(!!permitId);
+  const { register, handleSubmit, reset } = useForm<FormValues>();
 
   useEffect(() => {
     if (activeId) fetchCraneChecklistItems(activeId).then(d => setItems(d as ItemRow[])).catch(e => setError(e.message));
   }, [activeId]);
+
+  // Prefill from the permit (and its Lifting Plan, if one exists — which
+  // usually has more precise crane figures) so crane ID/type/capacity/
+  // operator don't need to be typed a third time.
+  useEffect(() => {
+    if (!permitId || activeId) { setLoadingDefaults(false); return; }
+    (async () => {
+      const { data: permit } = await supabase
+        .from('permits').select('location, crane_type, rated_capacity_ton, crane_operator_name, lifting_plan_id')
+        .eq('id', permitId).maybeSingle();
+      if (!permit) { setLoadingDefaults(false); return; }
+
+      let craneId = ''; let craneType = permit.crane_type ?? ''; let capacity = permit.rated_capacity_ton?.toString() ?? '';
+      let operator = permit.crane_operator_name ?? '';
+
+      if (permit.lifting_plan_id) {
+        const { data: plan } = await supabase
+          .from('lifting_plans').select('crane_id, crane_type, rated_capacity_ton, operator_name')
+          .eq('id', permit.lifting_plan_id).maybeSingle();
+        if (plan) {
+          craneId = plan.crane_id ?? '';
+          craneType = plan.crane_type ?? craneType;
+          capacity = plan.rated_capacity_ton?.toString() ?? capacity;
+          operator = plan.operator_name ?? operator;
+        }
+      }
+
+      reset({ crane_id: craneId, crane_type: craneType, capacity_ton: capacity, operator_name: operator, location: permit.location ?? '' });
+      setLoadingDefaults(false);
+    })();
+  }, [permitId, activeId, reset]);
 
   async function onCreate(v: FormValues) {
     if (!profile) return;
@@ -71,6 +104,8 @@ export default function CraneChecklistPage() {
 
   const inputClass = 'w-full rounded-lg border border-slate-300 px-3 py-2.5 text-base focus:border-brand focus:ring-1 focus:ring-brand';
   const labelClass = 'block text-sm font-medium text-slate-700 mb-1';
+
+  if (loadingDefaults) return <div className="text-slate-400 text-sm">Loading…</div>;
 
   if (!activeId) {
     return (

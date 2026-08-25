@@ -18,6 +18,13 @@ interface FormValues {
   ground_condition: string; ground_bearing_assessment: string; underground_services: string;
 }
 
+interface LinkedPermitInfo {
+  project_id: string; contractor_id: string; project_name: string; contractor_name: string;
+  location: string; crane_type: string | null; rated_capacity_ton: number | null; load_weight_ton: number | null;
+  lifting_supervisor_name: string | null; crane_operator_name: string | null;
+  rigger_name: string | null; signalman_name: string | null;
+}
+
 export default function LiftingPlanFormPage() {
   const { profile } = useAuth();
   const navigate = useNavigate();
@@ -26,16 +33,56 @@ export default function LiftingPlanFormPage() {
 
   const [projects, setProjects] = useState<{ id: string; project_name: string }[]>([]);
   const [contractors, setContractors] = useState<{ id: string; company_name: string }[]>([]);
+  const [linkedPermit, setLinkedPermit] = useState<LinkedPermitInfo | null>(null);
+  const [loadingPermit, setLoadingPermit] = useState(!!linkedPermitId);
   const [steps, setSteps] = useState<string[]>(DEFAULT_LIFT_SEQUENCE);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { register, handleSubmit } = useForm<FormValues>();
+  const { register, handleSubmit, reset } = useForm<FormValues>();
 
   useEffect(() => {
     supabase.from('projects').select('id, project_name').then(({ data }) => setProjects(data ?? []));
     supabase.from('contractors').select('id, company_name').then(({ data }) => setContractors(data ?? []));
   }, []);
+
+  // When arriving from a permit's "Create Lifting Plan" link, lock Project
+  // and Contractor to that permit's own values (a mismatch here is exactly
+  // what causes "new row violates row-level security policy" — the plan's
+  // contractor must match the permit's, not be freely chosen) and prefill
+  // everything else that's already known so it isn't retyped.
+  useEffect(() => {
+    if (!linkedPermitId) return;
+    (async () => {
+      const { data, error } = await supabase
+        .from('permits')
+        .select('project_id, contractor_id, location, crane_type, rated_capacity_ton, load_weight_ton, lifting_supervisor_name, crane_operator_name, rigger_name, signalman_name, projects(project_name), contractors(company_name)')
+        .eq('id', linkedPermitId)
+        .single();
+      if (error || !data) {
+        setError(error?.message ?? 'Could not load the linked permit.');
+        setLoadingPermit(false);
+        return;
+      }
+      const info: LinkedPermitInfo = {
+        project_id: data.project_id, contractor_id: data.contractor_id,
+        project_name: (data as any).projects?.project_name ?? '—',
+        contractor_name: (data as any).contractors?.company_name ?? '—',
+        location: data.location, crane_type: data.crane_type, rated_capacity_ton: data.rated_capacity_ton,
+        load_weight_ton: data.load_weight_ton, lifting_supervisor_name: data.lifting_supervisor_name,
+        crane_operator_name: data.crane_operator_name, rigger_name: data.rigger_name, signalman_name: data.signalman_name
+      };
+      setLinkedPermit(info);
+      reset({
+        project_id: info.project_id, contractor_id: info.contractor_id, location: info.location,
+        crane_type: info.crane_type ?? '', rated_capacity_ton: info.rated_capacity_ton?.toString() ?? '',
+        load_weight_ton: info.load_weight_ton?.toString() ?? '',
+        lifting_supervisor_name: info.lifting_supervisor_name ?? '', operator_name: info.crane_operator_name ?? '',
+        rigger_name: info.rigger_name ?? '', signalman_name: info.signalman_name ?? ''
+      });
+      setLoadingPermit(false);
+    })();
+  }, [linkedPermitId, reset]);
 
   async function onSubmit(v: FormValues) {
     if (!profile) return;
@@ -44,8 +91,10 @@ export default function LiftingPlanFormPage() {
     try {
       const plan = await createLiftingPlan({
         linked_permit_id: linkedPermitId,
-        project_id: v.project_id,
-        contractor_id: v.contractor_id,
+        // When linked, always use the permit's own project/contractor —
+        // never the (hidden) form values — so this can never mismatch.
+        project_id: linkedPermit ? linkedPermit.project_id : v.project_id,
+        contractor_id: linkedPermit ? linkedPermit.contractor_id : v.contractor_id,
         location: v.location,
         description: v.description || undefined,
         load_description: v.load_description || undefined,
@@ -95,25 +144,35 @@ export default function LiftingPlanFormPage() {
     </div>
   );
 
+  if (loadingPermit) return <div className="text-slate-400 text-sm">Loading permit details…</div>;
+
   return (
     <div className="space-y-4 pb-24">
       <h1 className="text-lg font-bold text-navy">Create Lifting Plan</h1>
-      {linkedPermitId && <p className="text-xs text-slate-400">Will be linked to the Lifting PTW you came from.</p>}
+      {linkedPermitId && <p className="text-xs text-slate-400">Linked to the Lifting PTW you came from — project and contractor are locked to match it.</p>}
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         {section('General', <>
           <div className="grid grid-cols-2 gap-3">
             <div><label className={labelClass}>Project *</label>
-              <select {...register('project_id', { required: true })} className={inputClass}>
-                <option value="">Select…</option>
-                {projects.map(p => <option key={p.id} value={p.id}>{p.project_name}</option>)}
-              </select>
+              {linkedPermit ? (
+                <div className={`${inputClass} bg-slate-50 text-slate-500`}>{linkedPermit.project_name}</div>
+              ) : (
+                <select {...register('project_id', { required: true })} className={inputClass}>
+                  <option value="">Select…</option>
+                  {projects.map(p => <option key={p.id} value={p.id}>{p.project_name}</option>)}
+                </select>
+              )}
             </div>
             <div><label className={labelClass}>Contractor *</label>
-              <select {...register('contractor_id', { required: true })} className={inputClass}>
-                <option value="">Select…</option>
-                {contractors.map(c => <option key={c.id} value={c.id}>{c.company_name}</option>)}
-              </select>
+              {linkedPermit ? (
+                <div className={`${inputClass} bg-slate-50 text-slate-500`}>{linkedPermit.contractor_name}</div>
+              ) : (
+                <select {...register('contractor_id', { required: true })} className={inputClass}>
+                  <option value="">Select…</option>
+                  {contractors.map(c => <option key={c.id} value={c.id}>{c.company_name}</option>)}
+                </select>
+              )}
             </div>
           </div>
           <div><label className={labelClass}>Location *</label><input {...register('location', { required: true })} className={inputClass} /></div>
