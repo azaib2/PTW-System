@@ -55,6 +55,7 @@ export default function App() {
             <Route path="/" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
               <Route index element={<DashboardPage />} />
               <Route path="permits/new" element={<CreatePermitPage />} />
+              <Route path="permits/:id/edit" element={<CreatePermitPage />} />
               <Route path="permits/:id" element={<PermitDetailPage />} />
               <Route path="permits/active" element={
                 <PermitListPage title="Active Permits" statuses={['approved', 'active', 'expiring_soon', 'suspended']} />

@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import StatusBadge from '@/components/StatusBadge';
 import type { Permit, PermitStatus } from '@/types';
+import { safeDynamicImport } from '@/lib/safeDynamicImport';
 
 const ARCHIVE_STATUSES: PermitStatus[] = ['closed', 'expired', 'rejected', 'cancelled'];
 
@@ -33,7 +34,7 @@ export default function ArchivePage() {
   async function downloadPdf(p: Permit) {
     setPdfBusyId(p.id);
     try {
-      const { generateHotColdWorkPdf, generateLiftingPackagePdf } = await import('@/features/pdf/pdfService');
+      const { generateHotColdWorkPdf, generateLiftingPackagePdf } = await safeDynamicImport(() => import('@/features/pdf/pdfService'));
       if (p.permit_type === 'lifting') await generateLiftingPackagePdf(p.id);
       else await generateHotColdWorkPdf(p.id);
     } catch (e) {

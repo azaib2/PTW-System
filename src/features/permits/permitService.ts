@@ -108,6 +108,26 @@ export async function createPermit(input: CreatePermitInput) {
   return permit as Permit;
 }
 
+// Fields the requestor may edit — deliberately excludes permit_type,
+// permit_number, status, project_id/contractor_id (locked at creation),
+// and all approval/audit metadata. RLS is the real backstop: an update is
+// only accepted while status is draft/rejected/suspended/cancelled and the
+// caller is that permit's own contractor (or admin/HSE).
+export type UpdatePermitInput = Partial<Omit<CreatePermitInput, 'permit_type' | 'project_id' | 'contractor_id' | 'created_by'>>;
+
+export async function updatePermit(permitId: string, input: UpdatePermitInput) {
+  const { data: permit, error: fetchErr } = await supabase.from('permits').select('status').eq('id', permitId).single();
+  if (fetchErr) throw new Error(fetchErr.message);
+  if (permit.status !== 'draft') {
+    throw new Error('This permit can only be edited while it is in draft.');
+  }
+
+  const { error } = await supabase.from('permits').update(input).eq('id', permitId);
+  if (error) throw new Error(error.message); // RLS is the real enforcement if status/ownership don't match
+
+  await logAudit('permits', permitId, 'edited', 'draft', 'draft', null);
+}
+
 export async function updatePermitControl(permitId: string, controlKey: string, isChecked: boolean, remarks?: string) {
   const { error } = await supabase
     .from('permit_controls')

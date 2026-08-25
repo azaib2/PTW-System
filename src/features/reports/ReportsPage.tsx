@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { EXPORT_PRESETS } from './exportPresets';
 import type { PermitStatus, PermitType } from '@/types';
+import { safeDynamicImport } from '@/lib/safeDynamicImport';
 
 interface Kpis {
   total: number; active: number; closed: number; expired: number; suspended: number;
@@ -43,12 +44,12 @@ export default function ReportsPage() {
     setExportingLabel(label);
     setError(null);
     try {
-      const { exportPermitsToExcel } = await import('./excelExport');
+      const { exportPermitsToExcel } = await safeDynamicImport(() => import('./excelExport'));
       if (type) {
-        const { fetchPermits } = await import('@/features/permits/permitService');
+        const { fetchPermits } = await safeDynamicImport(() => import('@/features/permits/permitService'));
         const all = await fetchPermits(statuses ? { status: statuses } : {});
         const filtered = all.filter(p => p.permit_type === type);
-        const XLSX = await import('xlsx');
+        const XLSX = await safeDynamicImport(() => import('xlsx'));
         const rows = filtered.map(p => ({
           'Permit Number': p.permit_number, Location: p.location, Activity: p.activity,
           Supervisor: p.supervisor_name ?? '', Status: p.status

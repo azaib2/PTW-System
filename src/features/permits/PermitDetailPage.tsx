@@ -16,6 +16,7 @@ import {
   updatePermitControl, submitPermit, approvePermit, rejectPermit, startReview
 } from './permitService';
 import { CAN_VERIFY, CAN_FINAL_APPROVE, PERMIT_TYPE_LABEL, type Permit } from '@/types';
+import { safeDynamicImport } from '@/lib/safeDynamicImport';
 
 interface ControlRow { id: string; control_key: string; control_label: string; is_checked: boolean; remarks: string | null; }
 interface ApprovalRow { id: string; action: string; remarks: string | null; created_at: string; actor: { full_name: string; role: string } | null; }
@@ -83,7 +84,7 @@ export default function PermitDetailPage() {
     setPdfBusy(true);
     setError(null);
     try {
-      const { generateHotColdWorkPdf, generateLiftingPackagePdf } = await import('@/features/pdf/pdfService');
+      const { generateHotColdWorkPdf, generateLiftingPackagePdf } = await safeDynamicImport(() => import('@/features/pdf/pdfService'));
       if (permit.permit_type === 'lifting') await generateLiftingPackagePdf(permit.id);
       else await generateHotColdWorkPdf(permit.id);
     } catch (e) {
@@ -208,6 +209,13 @@ export default function PermitDetailPage() {
 
       {/* Actions */}
       <div className="sticky bottom-16 md:bottom-0 bg-bgapp py-3 -mx-4 px-4 border-t border-slate-200 space-y-2">
+        {permit.status === 'draft' && canSubmit && (
+          <Link to={`/permits/${permit.id}/edit`}
+            className="block w-full text-center bg-slate-100 text-slate-700 font-semibold py-3 rounded-lg">
+            Edit Permit
+          </Link>
+        )}
+
         {canSubmit && (
           <button disabled={actionBusy} onClick={() => setPendingAction({ label: 'submit this permit for review', fn: () => submitPermit(permit.id, profile.id), requirePhoto: true })}
             className="w-full bg-brand text-white font-semibold py-3.5 rounded-lg disabled:opacity-60">

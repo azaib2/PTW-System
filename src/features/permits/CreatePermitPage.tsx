@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/features/auth/AuthContext';
-import { createPermit, type CreatePermitInput } from './permitService';
+import { createPermit, updatePermit, type CreatePermitInput } from './permitService';
 import { HOT_WORK_TYPES, CRITICAL_LIFT_QUESTIONS } from './controlDefs';
 import type { PermitType } from '@/types';
 
@@ -47,10 +47,19 @@ interface FormValues {
   no_alternative_method_confirmed: boolean;
 }
 
+function toLocalInputValue(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export default function CreatePermitPage() {
   const { profile } = useAuth();
   const navigate = useNavigate();
   const [params] = useSearchParams();
+  const { id: editPermitId } = useParams<{ id: string }>();
+  const isEditMode = !!editPermitId;
   const initialType = (params.get('type') as PermitType) || 'hot_work';
 
   const [projects, setProjects] = useState<{ id: string; project_name: string }[]>([]);
@@ -58,8 +67,10 @@ export default function CreatePermitPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [criticalAnswers, setCriticalAnswers] = useState<Record<string, boolean>>({});
+  const [lockedInfo, setLockedInfo] = useState<{ project_name: string; contractor_name: string } | null>(null);
+  const [loadingExisting, setLoadingExisting] = useState(isEditMode);
 
-  const { register, handleSubmit, watch, formState: { errors } } = useForm<FormValues>({
+  const { register, handleSubmit, watch, reset, formState: { errors } } = useForm<FormValues>({
     defaultValues: { permit_type: initialType, location: params.get('location') ?? '' }
   });
   const permitType = watch('permit_type');
@@ -84,25 +95,60 @@ export default function CreatePermitPage() {
     }
   }, [profile]);
 
+  // Edit mode: load the existing draft and prefill every field. Type,
+  // project, and contractor are locked — those are decided once at
+  // creation and never change on an edit.
+  useEffect(() => {
+    if (!editPermitId) return;
+    (async () => {
+      const { data, error } = await supabase
+        .from('permits').select('*, projects(project_name), contractors(company_name)')
+        .eq('id', editPermitId).single();
+      if (error || !data) {
+        setError(error?.message ?? 'Could not load this permit.');
+        setLoadingExisting(false);
+        return;
+      }
+      if (data.status !== 'draft') {
+        setError('This permit can no longer be edited — it is not in draft status.');
+        setLoadingExisting(false);
+        return;
+      }
+      setLockedInfo({
+        project_name: (data as any).projects?.project_name ?? '—',
+        contractor_name: (data as any).contractors?.company_name ?? '—'
+      });
+      reset({
+        permit_type: data.permit_type, project_id: data.project_id, contractor_id: data.contractor_id,
+        location: data.location ?? '', exact_area: data.exact_area ?? '', activity: data.activity ?? '',
+        description: data.description ?? '', detail_of_surroundings: data.detail_of_surroundings ?? '',
+        supervisor_name: data.supervisor_name ?? '', workers: (data.workers ?? []).join(', '),
+        start_time: toLocalInputValue(data.start_time), expiry_time: toLocalInputValue(data.expiry_time),
+        hot_work_type: data.hot_work_type ?? '', fire_watcher_name: data.fire_watcher_name ?? '',
+        load_description: data.load_description ?? '', load_weight_ton: data.load_weight_ton?.toString() ?? '',
+        crane_type: data.crane_type ?? '', rated_capacity_ton: data.rated_capacity_ton?.toString() ?? '',
+        crane_manufacturer: data.crane_manufacturer ?? '',
+        lifting_supervisor_name: data.lifting_supervisor_name ?? '', lifting_supervisor_contact: data.lifting_supervisor_contact ?? '',
+        crane_operator_name: data.crane_operator_name ?? '', crane_operator_contact: data.crane_operator_contact ?? '',
+        rigger_name: data.rigger_name ?? '', rigger_contact: data.rigger_contact ?? '',
+        signalman_name: data.signalman_name ?? '', signalman_contact: data.signalman_contact ?? '',
+        additional_information: data.additional_information ?? '', department: data.department ?? '',
+        alternative_company_contact: data.alternative_company_contact ?? '', company_permit_issuer: data.company_permit_issuer ?? '',
+        hours_of_work: data.hours_of_work ?? '', deviations_from_method_statement: data.deviations_from_method_statement ?? '',
+        site_specific_hazards: data.site_specific_hazards ?? '', work_leader_name: data.work_leader_name ?? '',
+        superintendent_name: data.superintendent_name ?? '', no_alternative_method_confirmed: !!data.no_alternative_method_confirmed
+      });
+      setCriticalAnswers((data.critical_lift_answers as Record<string, boolean>) ?? {});
+      setLoadingExisting(false);
+    })();
+  }, [editPermitId, reset]);
+
   async function onSubmit(values: FormValues) {
     if (!profile) return;
     setSubmitting(true);
     setError(null);
     try {
-      const input: CreatePermitInput = {
-        permit_type: values.permit_type,
-        project_id: values.project_id,
-        contractor_id: values.contractor_id || profile.contractor_id || '',
-        location: values.location,
-        exact_area: values.exact_area || undefined,
-        activity: values.activity,
-        description: values.description || undefined,
-        detail_of_surroundings: values.detail_of_surroundings || undefined,
-        supervisor_name: values.supervisor_name,
-        workers: values.workers ? values.workers.split(',').map(w => w.trim()).filter(Boolean) : undefined,
-        start_time: new Date(values.start_time).toISOString(),
-        expiry_time: new Date(values.expiry_time).toISOString(),
-        created_by: profile.id,
+      const typeSpecific = {
         ...(values.permit_type === 'hot_work' ? { hot_work_type: values.hot_work_type, fire_watcher_name: values.fire_watcher_name || undefined } : {}),
         ...(values.permit_type === 'lifting' ? {
           load_description: values.load_description,
@@ -135,12 +181,42 @@ export default function CreatePermitPage() {
           no_alternative_method_confirmed: !!values.no_alternative_method_confirmed
         } : {})
       };
+
+      if (isEditMode && editPermitId) {
+        await updatePermit(editPermitId, {
+          location: values.location, exact_area: values.exact_area || undefined, activity: values.activity,
+          description: values.description || undefined, detail_of_surroundings: values.detail_of_surroundings || undefined,
+          supervisor_name: values.supervisor_name,
+          workers: values.workers ? values.workers.split(',').map(w => w.trim()).filter(Boolean) : undefined,
+          start_time: new Date(values.start_time).toISOString(), expiry_time: new Date(values.expiry_time).toISOString(),
+          ...typeSpecific
+        });
+        navigate(`/permits/${editPermitId}`);
+        return;
+      }
+
+      const input: CreatePermitInput = {
+        permit_type: values.permit_type,
+        project_id: values.project_id,
+        contractor_id: values.contractor_id || profile.contractor_id || '',
+        location: values.location,
+        exact_area: values.exact_area || undefined,
+        activity: values.activity,
+        description: values.description || undefined,
+        detail_of_surroundings: values.detail_of_surroundings || undefined,
+        supervisor_name: values.supervisor_name,
+        workers: values.workers ? values.workers.split(',').map(w => w.trim()).filter(Boolean) : undefined,
+        start_time: new Date(values.start_time).toISOString(),
+        expiry_time: new Date(values.expiry_time).toISOString(),
+        created_by: profile.id,
+        ...typeSpecific
+      };
       if (!input.contractor_id) throw new Error('Select a contractor.');
 
       const permit = await createPermit(input);
       navigate(`/permits/${permit.id}`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to create permit.');
+      setError(e instanceof Error ? e.message : `Failed to ${isEditMode ? 'save' : 'create'} permit.`);
     } finally {
       setSubmitting(false);
     }
@@ -149,9 +225,11 @@ export default function CreatePermitPage() {
   const inputClass = 'w-full rounded-lg border border-slate-300 px-3 py-2.5 text-base focus:border-brand focus:ring-1 focus:ring-brand';
   const labelClass = 'block text-sm font-medium text-slate-700 mb-1';
 
+  if (loadingExisting) return <div className="text-slate-400 text-sm">Loading permit…</div>;
+
   return (
     <div className="space-y-4 pb-24">
-      <h1 className="text-lg font-bold text-navy">Create Permit</h1>
+      <h1 className="text-lg font-bold text-navy">{isEditMode ? 'Edit Draft Permit' : 'Create Permit'}</h1>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div className="rounded-lg bg-amber-50 border border-warning text-amber-800 text-xs font-semibold p-3">
@@ -161,28 +239,40 @@ export default function CreatePermitPage() {
         <div className="bg-white rounded-xl shadow-sm p-4 space-y-3">
           <div>
             <label className={labelClass}>Permit Type *</label>
-            <select {...register('permit_type', { required: true })} className={inputClass}>
-              <option value="hot_work">Hot Work</option>
-              <option value="cold_work">Cold Work</option>
-              <option value="lifting">General Lifting</option>
-              <option value="general_work">General Work</option>
-              <option value="work_at_height">Working at Height</option>
-            </select>
+            {isEditMode ? (
+              <div className={`${inputClass} bg-slate-50 text-slate-500 capitalize`}>{permitType.replace('_', ' ')}</div>
+            ) : (
+              <select {...register('permit_type', { required: true })} className={inputClass}>
+                <option value="hot_work">Hot Work</option>
+                <option value="cold_work">Cold Work</option>
+                <option value="lifting">General Lifting</option>
+                <option value="general_work">General Work</option>
+                <option value="work_at_height">Working at Height</option>
+              </select>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelClass}>Project *</label>
-              <select {...register('project_id', { required: true })} className={inputClass}>
-                <option value="">Select…</option>
-                {projects.map(p => <option key={p.id} value={p.id}>{p.project_name}</option>)}
-              </select>
+              {isEditMode && lockedInfo ? (
+                <div className={`${inputClass} bg-slate-50 text-slate-500`}>{lockedInfo.project_name}</div>
+              ) : (
+                <select {...register('project_id', { required: true })} className={inputClass}>
+                  <option value="">Select…</option>
+                  {projects.map(p => <option key={p.id} value={p.id}>{p.project_name}</option>)}
+                </select>
+              )}
             </div>
             <div>
               <label className={labelClass}>Contractor *</label>
-              <select {...register('contractor_id', { required: !profile?.contractor_id })} className={inputClass} defaultValue={profile?.contractor_id ?? ''}>
-                {!profile?.contractor_id && <option value="">Select…</option>}
-                {contractors.map(c => <option key={c.id} value={c.id}>{c.company_name}</option>)}
-              </select>
+              {isEditMode && lockedInfo ? (
+                <div className={`${inputClass} bg-slate-50 text-slate-500`}>{lockedInfo.contractor_name}</div>
+              ) : (
+                <select {...register('contractor_id', { required: !profile?.contractor_id })} className={inputClass} defaultValue={profile?.contractor_id ?? ''}>
+                  {!profile?.contractor_id && <option value="">Select…</option>}
+                  {contractors.map(c => <option key={c.id} value={c.id}>{c.company_name}</option>)}
+                </select>
+              )}
             </div>
           </div>
         </div>
@@ -338,7 +428,7 @@ export default function CreatePermitPage() {
         <div className="sticky bottom-16 md:bottom-0 bg-bgapp py-3 -mx-4 px-4 border-t border-slate-200">
           <button type="submit" disabled={submitting}
             className="w-full bg-brand text-white font-semibold py-3.5 rounded-lg text-base disabled:opacity-60">
-            {submitting ? 'Saving…' : 'Save as Draft'}
+            {submitting ? 'Saving…' : isEditMode ? 'Save Changes' : 'Save as Draft'}
           </button>
         </div>
       </form>

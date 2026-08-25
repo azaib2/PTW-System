@@ -5,6 +5,7 @@ import { fetchPermits } from './permitService';
 import StatusBadge from '@/components/StatusBadge';
 import { PERMIT_TYPE_LABEL } from '@/types';
 import { getEffectiveStatus } from '@/lib/permitStatus';
+import { safeDynamicImport } from '@/lib/safeDynamicImport';
 import type { Permit, PermitStatus } from '@/types';
 
 export default function PermitListPage({ title, statuses }: { title: string; statuses: PermitStatus[] }) {
@@ -23,7 +24,7 @@ export default function PermitListPage({ title, statuses }: { title: string; sta
   async function handleExport() {
     setExporting(true);
     try {
-      const { exportPermitsToExcel } = await import('@/features/reports/excelExport');
+      const { exportPermitsToExcel } = await safeDynamicImport(() => import('@/features/reports/excelExport'));
       await exportPermitsToExcel({ statuses, label: title.replace(/\s+/g, '-') });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Export failed.');
