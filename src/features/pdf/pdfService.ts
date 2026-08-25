@@ -1,7 +1,7 @@
 import { PDFDocument, StandardFonts, rgb, PDFFont, PDFPage } from 'pdf-lib';
 import { format } from 'date-fns';
 import { supabase } from '@/lib/supabase';
-import { fetchPermit, fetchPermitControls, fetchPermitApprovals } from '@/features/permits/permitService';
+import { fetchPermit, fetchPermitControls, fetchPermitApprovals, fetchPermitHazards, fetchPermitWorkers } from '@/features/permits/permitService';
 import {
   fetchLiftingPlan, fetchLiftingPlanSteps, fetchCompetencyDocuments, fetchLatestFieldVerification
 } from '@/features/lifting/liftingService';
@@ -110,8 +110,9 @@ function downloadBlob(bytes: Uint8Array, filename: string) {
 // Hot Work / Cold Work PDF (section 39)
 // ---------------------------------------------------------------------
 export async function generateHotColdWorkPdf(permitId: string) {
-  const [permit, controls, approvals, photos] = await Promise.all([
-    fetchPermit(permitId), fetchPermitControls(permitId), fetchPermitApprovals(permitId), fetchPhotos(permitId)
+  const [permit, controls, hazards, approvals, photos, workers] = await Promise.all([
+    fetchPermit(permitId), fetchPermitControls(permitId), fetchPermitHazards(permitId),
+    fetchPermitApprovals(permitId), fetchPhotos(permitId), fetchPermitWorkers(permitId)
   ]);
 
   const TITLES: Record<string, string> = {
@@ -126,12 +127,45 @@ export async function generateHotColdWorkPdf(permitId: string) {
   fieldLine(ctx, 'Supervisor', permit.supervisor_name ?? '—');
   fieldLine(ctx, 'Start', permit.start_time ? format(new Date(permit.start_time), 'dd MMM yyyy HH:mm') : '—');
   fieldLine(ctx, 'Expiry', permit.expiry_time ? format(new Date(permit.expiry_time), 'dd MMM yyyy HH:mm') : '—');
+  if (permit.applicable_standards) fieldLine(ctx, 'Standards', permit.applicable_standards);
+  if (permit.equipment_used) fieldLine(ctx, 'Equipment/Tools', permit.equipment_used);
+  if (permit.ppe_required) fieldLine(ctx, 'PPE Required', permit.ppe_required);
+  if (permit.additional_permits_required) fieldLine(ctx, 'Additional Permits', permit.additional_permits_required);
   if (permit.description) { ctx.y -= 4; paragraph(ctx, permit.description); }
   ctx.y -= 10;
 
-  sectionTitle(ctx, 'Field Controls');
-  for (const c of controls as any[]) checklistLine(ctx, c.control_label, c.is_checked);
+  if ((hazards as any[]).length) {
+    sectionTitle(ctx, 'Identified Hazards');
+    for (const h of hazards as any[]) checklistLine(ctx, h.hazard_label, h.is_applicable);
+    ctx.y -= 10;
+  }
+
+  sectionTitle(ctx, 'Safety Controls & Precautions');
+  for (const c of (controls as any[]).filter(c => !c.is_pre_authorization)) checklistLine(ctx, c.control_label, c.is_checked);
   ctx.y -= 10;
+
+  const preAuth = (controls as any[]).filter(c => c.is_pre_authorization);
+  if (preAuth.length) {
+    sectionTitle(ctx, 'Pre-Authorisation Checks');
+    for (const c of preAuth) checklistLine(ctx, c.control_label, c.is_checked);
+    ctx.y -= 10;
+  }
+
+  if (permit.emergency_procedure) {
+    sectionTitle(ctx, 'Emergency Procedure');
+    paragraph(ctx, permit.emergency_procedure);
+    ctx.y -= 10;
+  }
+
+  if ((workers as any[]).length) {
+    sectionTitle(ctx, 'Worker Log — Sign On / Sign Off');
+    for (const w of workers as any[]) {
+      const on = w.signed_on_at ? format(new Date(w.signed_on_at), 'dd MMM HH:mm') : 'not signed on';
+      const off = w.signed_off_at ? format(new Date(w.signed_off_at), 'dd MMM HH:mm') : 'not signed off';
+      fieldLine(ctx, w.full_name, `${w.designation ?? '—'} · On: ${on} · Off: ${off}`);
+    }
+    ctx.y -= 10;
+  }
 
   sectionTitle(ctx, 'Approval History');
   for (const a of approvals as any[]) {
@@ -155,9 +189,9 @@ export async function generateHotColdWorkPdf(permitId: string) {
 // ---------------------------------------------------------------------
 export async function generateLiftingPackagePdf(permitId: string) {
   const permit = await fetchPermit(permitId);
-  const [controls, approvals, photos, competency, fieldVerification] = await Promise.all([
-    fetchPermitControls(permitId), fetchPermitApprovals(permitId), fetchPhotos(permitId),
-    fetchCompetencyDocuments(permitId), fetchLatestFieldVerification(permitId)
+  const [controls, hazards, approvals, photos, competency, fieldVerification, workers] = await Promise.all([
+    fetchPermitControls(permitId), fetchPermitHazards(permitId), fetchPermitApprovals(permitId), fetchPhotos(permitId),
+    fetchCompetencyDocuments(permitId), fetchLatestFieldVerification(permitId), fetchPermitWorkers(permitId)
   ]);
   const plan = permit.lifting_plan_id ? await fetchLiftingPlan(permit.lifting_plan_id) : null;
   const steps = permit.lifting_plan_id ? await fetchLiftingPlanSteps(permit.lifting_plan_id) : [];
@@ -178,8 +212,43 @@ export async function generateLiftingPackagePdf(permitId: string) {
   fieldLine(ctx, 'Crane', `${permit.crane_type ?? '—'} (${permit.rated_capacity_ton ?? '—'} t)`);
   fieldLine(ctx, 'Start', permit.start_time ? format(new Date(permit.start_time), 'dd MMM yyyy HH:mm') : '—');
   fieldLine(ctx, 'Expiry', permit.expiry_time ? format(new Date(permit.expiry_time), 'dd MMM yyyy HH:mm') : '—');
+  if (permit.applicable_standards) fieldLine(ctx, 'Standards', permit.applicable_standards);
+  if (permit.equipment_used) fieldLine(ctx, 'Equipment/Tools', permit.equipment_used);
+  if (permit.ppe_required) fieldLine(ctx, 'PPE Required', permit.ppe_required);
+  if (permit.additional_permits_required) fieldLine(ctx, 'Additional Permits', permit.additional_permits_required);
   ctx.y -= 6;
-  for (const c of controls as any[]) checklistLine(ctx, c.control_label, c.is_checked);
+
+  if ((hazards as any[]).length) {
+    sectionTitle(ctx, 'Identified Hazards');
+    for (const h of hazards as any[]) checklistLine(ctx, h.hazard_label, h.is_applicable);
+    ctx.y -= 6;
+  }
+
+  sectionTitle(ctx, 'Safety Controls & Precautions');
+  for (const c of (controls as any[]).filter(c => !c.is_pre_authorization)) checklistLine(ctx, c.control_label, c.is_checked);
+  ctx.y -= 6;
+
+  const liftPreAuth = (controls as any[]).filter(c => c.is_pre_authorization);
+  if (liftPreAuth.length) {
+    sectionTitle(ctx, 'Pre-Authorisation Checks');
+    for (const c of liftPreAuth) checklistLine(ctx, c.control_label, c.is_checked);
+    ctx.y -= 6;
+  }
+
+  if (permit.emergency_procedure) {
+    sectionTitle(ctx, 'Emergency Procedure');
+    paragraph(ctx, permit.emergency_procedure);
+    ctx.y -= 6;
+  }
+
+  if ((workers as any[]).length) {
+    sectionTitle(ctx, 'Worker Log — Sign On / Sign Off');
+    for (const w of workers as any[]) {
+      const on = w.signed_on_at ? format(new Date(w.signed_on_at), 'dd MMM HH:mm') : 'not signed on';
+      const off = w.signed_off_at ? format(new Date(w.signed_off_at), 'dd MMM HH:mm') : 'not signed off';
+      fieldLine(ctx, w.full_name, `${w.designation ?? '—'} · On: ${on} · Off: ${off}`);
+    }
+  }
 
   // Page 2: Lifting Plan
   newPage(ctx);

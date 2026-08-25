@@ -102,6 +102,31 @@ Each stage should be built and manually tested against a real Supabase
 project before moving to the next — per the brief, this is not generated
 as one giant block.
 
+## Template alignment (migrations 0010–0011)
+
+The four reference PTW templates (Hot Work, Lifting Operations, Working at
+Height, generic PTW) carry sections the app didn't originally capture. This
+pass adds them:
+
+- **Applicable Standards, Equipment/Tools Used, PPE Required, Additional
+  Permits Required, Emergency Procedure** — free-text fields on every
+  permit, prefilled from the matching template when a permit type is chosen
+  and always editable.
+- **Identified Hazards** — a checklist distinct from Safety Controls
+  (what could hurt someone vs. what mitigates it), seeded per permit type.
+- **Pre-Authorisation Checks** — the templates' final go/no-go gate, seeded
+  into `permit_controls` with `is_pre_authorization = true`. Approval is
+  blocked (client-side button disabled, server-side `approvePermit()`
+  throws) until every pre-authorisation item is checked, the same pattern
+  already used for crane-checklist critical items.
+- **Worker Sign On / Sign Off log** (`permit_workers`) — replaces the plain
+  `permits.workers` name list with real per-worker evidence: name,
+  designation, certifications, and who/when signed a worker on and off.
+
+All of this is included in the permit detail page, the create/edit form,
+and both PDF generators. Migration 0011 backfills hazards and
+pre-authorisation rows onto permits created before this change.
+
 ## Security notes
 
 - Every table is RLS-protected; policies enforce contractor/project scoping,

@@ -6,19 +6,22 @@ import { useAuth } from '@/features/auth/AuthContext';
 import StatusBadge from '@/components/StatusBadge';
 import { getEffectiveStatus } from '@/lib/permitStatus';
 import FieldControlPanel from './FieldControlPanel';
+import WorkerLogPanel from './WorkerLogPanel';
 import AttachmentsPanel from '@/features/documents/AttachmentsPanel';
 import PhotosPanel from '@/features/documents/PhotosPanel';
 import PermitQrPanel from '@/features/qr/PermitQrPanel';
 import AuditTrailPanel from '@/features/audit/AuditTrailPanel';
 import ReAuthModal from '@/features/auth/ReAuthModal';
 import {
-  fetchPermit, fetchPermitControls, fetchPermitApprovals,
-  updatePermitControl, submitPermit, approvePermit, rejectPermit, startReview
+  fetchPermit, fetchPermitControls, fetchPermitApprovals, fetchPermitHazards,
+  updatePermitControl, updatePermitHazard, submitPermit, approvePermit, rejectPermit, startReview,
+  listIncompletePreAuthorizationLabels
 } from './permitService';
 import { CAN_VERIFY, CAN_FINAL_APPROVE, PERMIT_TYPE_LABEL, type Permit } from '@/types';
 import { safeDynamicImport } from '@/lib/safeDynamicImport';
 
-interface ControlRow { id: string; control_key: string; control_label: string; is_checked: boolean; remarks: string | null; }
+interface ControlRow { id: string; control_key: string; control_label: string; is_checked: boolean; remarks: string | null; is_pre_authorization: boolean; }
+interface HazardRow { id: string; hazard_key: string; hazard_label: string; is_applicable: boolean; remarks: string | null; }
 interface ApprovalRow { id: string; action: string; remarks: string | null; created_at: string; actor: { full_name: string; role: string } | null; }
 
 export default function PermitDetailPage() {
@@ -26,6 +29,7 @@ export default function PermitDetailPage() {
   const { profile } = useAuth();
   const [permit, setPermit] = useState<Permit | null>(null);
   const [controls, setControls] = useState<ControlRow[]>([]);
+  const [hazards, setHazards] = useState<HazardRow[]>([]);
   const [approvals, setApprovals] = useState<ApprovalRow[]>([]);
   const [fieldVerification, setFieldVerification] = useState<{ ready_to_lift: boolean } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -40,9 +44,10 @@ export default function PermitDetailPage() {
     if (!id) return;
     setLoading(true);
     try {
-      const [p, c, a] = await Promise.all([fetchPermit(id), fetchPermitControls(id), fetchPermitApprovals(id)]);
+      const [p, c, h, a] = await Promise.all([fetchPermit(id), fetchPermitControls(id), fetchPermitHazards(id), fetchPermitApprovals(id)]);
       setPermit(p);
       setControls(c as ControlRow[]);
+      setHazards(h as HazardRow[]);
       setApprovals(a as unknown as ApprovalRow[]);
       if (p.permit_type === 'lifting') {
         fetchLatestFieldVerification(id).then(setFieldVerification).catch(() => {});
@@ -62,6 +67,16 @@ export default function PermitDetailPage() {
       await updatePermitControl(permit!.id, row.control_key, !row.is_checked);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save control.');
+      load();
+    }
+  }
+
+  async function toggleHazard(row: HazardRow) {
+    setHazards(prev => prev.map(h => h.id === row.id ? { ...h, is_applicable: !row.is_applicable } : h));
+    try {
+      await updatePermitHazard(permit!.id, row.hazard_key, !row.is_applicable);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to save hazard.');
       load();
     }
   }
@@ -104,6 +119,10 @@ export default function PermitDetailPage() {
   const canSubmit = ['draft', 'rejected', 'suspended', 'cancelled'].includes(permit.status)
     && (profile.id === permit.created_by || profile.contractor_id === permit.contractor_id);
   const checkedCount = controls.filter(c => c.is_checked).length;
+  const safetyControls = controls.filter(c => !c.is_pre_authorization);
+  const preAuthControls = controls.filter(c => c.is_pre_authorization);
+  const incompletePreAuth = listIncompletePreAuthorizationLabels(controls);
+  const hasReferenceInfo = !!(permit.applicable_standards || permit.equipment_used || permit.ppe_required || permit.additional_permits_required || permit.emergency_procedure);
 
   return (
     <div className="space-y-4 pb-24">
@@ -143,13 +162,49 @@ export default function PermitDetailPage() {
         </div>
       )}
 
-      {/* Controls checklist */}
+      {/* Permit Information — reference content pulled from the source template */}
+      {hasReferenceInfo && (
+        <div className="bg-white rounded-xl shadow-sm p-4 space-y-2">
+          <h2 className="text-sm font-semibold text-slate-700 mb-1">Permit Information</h2>
+          {permit.applicable_standards && (
+            <div><dt className="text-slate-400 text-xs">Applicable Standards</dt><dd className="text-sm text-slate-800">{permit.applicable_standards}</dd></div>
+          )}
+          {permit.equipment_used && (
+            <div><dt className="text-slate-400 text-xs">Equipment / Tools Used</dt><dd className="text-sm text-slate-800">{permit.equipment_used}</dd></div>
+          )}
+          {permit.ppe_required && (
+            <div><dt className="text-slate-400 text-xs">PPE Required</dt><dd className="text-sm text-slate-800">{permit.ppe_required}</dd></div>
+          )}
+          {permit.additional_permits_required && (
+            <div><dt className="text-slate-400 text-xs">Additional Permits Required</dt><dd className="text-sm text-slate-800">{permit.additional_permits_required}</dd></div>
+          )}
+          {permit.emergency_procedure && (
+            <div><dt className="text-slate-400 text-xs">Emergency Procedure</dt><dd className="text-sm text-slate-800">{permit.emergency_procedure}</dd></div>
+          )}
+        </div>
+      )}
+
+      {/* Identified Hazards — separate from Safety Controls: what could hurt someone */}
+      {hazards.length > 0 && (
+        <div className="bg-amber-50/50 border border-amber-100 rounded-xl shadow-sm p-4 space-y-1">
+          <h2 className="text-sm font-semibold text-amber-900 mb-1">Identified Hazards</h2>
+          {hazards.map(h => (
+            <label key={h.id} className="flex items-center justify-between py-2 border-b border-amber-100 last:border-0 text-sm">
+              <span className="text-amber-900 pr-3">{h.hazard_label}</span>
+              <input type="checkbox" checked={h.is_applicable} onChange={() => toggleHazard(h)}
+                disabled={permit.status === 'closed'} className="w-6 h-6 accent-warning shrink-0" />
+            </label>
+          ))}
+        </div>
+      )}
+
+      {/* Safety Controls & Precautions */}
       <div className="bg-white rounded-xl shadow-sm p-4 space-y-1">
         <div className="flex items-center justify-between mb-1">
-          <h2 className="text-sm font-semibold text-slate-700">Field Controls</h2>
+          <h2 className="text-sm font-semibold text-slate-700">Safety Controls &amp; Precautions</h2>
           <span className="text-xs text-slate-400">{checkedCount}/{controls.length} checked</span>
         </div>
-        {controls.map(c => (
+        {safetyControls.map(c => (
           <label key={c.id} className="flex items-center justify-between py-2 border-b border-slate-100 last:border-0 text-sm">
             <span className="text-slate-700 pr-3">{c.control_label}</span>
             <input type="checkbox" checked={c.is_checked} onChange={() => toggleControl(c)}
@@ -157,6 +212,25 @@ export default function PermitDetailPage() {
           </label>
         ))}
       </div>
+
+      {/* Pre-Authorisation Checks — the final gate before approval */}
+      <div className="bg-blue-50/50 border border-blue-100 rounded-xl shadow-sm p-4 space-y-1">
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="text-sm font-semibold text-navy">Pre-Authorisation Checks</h2>
+          <span className="text-xs text-slate-400">{preAuthControls.filter(c => c.is_checked).length}/{preAuthControls.length} checked</span>
+        </div>
+        <p className="text-xs text-slate-500 -mt-0.5 mb-1">All items here must be checked before this permit can be approved.</p>
+        {preAuthControls.map(c => (
+          <label key={c.id} className="flex items-center justify-between py-2 border-b border-blue-100 last:border-0 text-sm">
+            <span className="text-slate-700 pr-3">{c.control_label}</span>
+            <input type="checkbox" checked={c.is_checked} onChange={() => toggleControl(c)}
+              disabled={permit.status === 'closed'} className="w-6 h-6 accent-brand shrink-0" />
+          </label>
+        ))}
+      </div>
+
+      {/* Worker Sign On / Off Log */}
+      <WorkerLogPanel permitId={permit.id} disabled={permit.status === 'closed'} />
 
       {/* Lifting Package (Stage 3) */}
       {permit.permit_type === 'lifting' && (
@@ -231,16 +305,23 @@ export default function PermitDetailPage() {
         )}
 
         {permit.status === 'under_review' && canFinalApprove && (
-          <div className="flex gap-2">
-            <button disabled={actionBusy} onClick={() => setPendingAction({ label: 'approve this permit', fn: () => approvePermit(permit.id, profile.id, permit.created_by), requirePhoto: true })}
-              className="flex-1 bg-success text-white font-semibold py-3.5 rounded-lg disabled:opacity-60">
-              Approve
-            </button>
-            <button disabled={actionBusy} onClick={() => setShowRejectBox(v => !v)}
-              className="flex-1 bg-danger text-white font-semibold py-3.5 rounded-lg disabled:opacity-60">
-              Reject
-            </button>
-          </div>
+          <>
+            {incompletePreAuth.length > 0 && (
+              <div className="rounded-lg bg-amber-50 border border-warning text-amber-800 text-xs p-2.5">
+                Approval is blocked until every Pre-Authorisation Check above is ticked ({incompletePreAuth.length} remaining).
+              </div>
+            )}
+            <div className="flex gap-2">
+              <button disabled={actionBusy || incompletePreAuth.length > 0} onClick={() => setPendingAction({ label: 'approve this permit', fn: () => approvePermit(permit.id, profile.id, permit.created_by), requirePhoto: true })}
+                className="flex-1 bg-success text-white font-semibold py-3.5 rounded-lg disabled:opacity-60">
+                Approve
+              </button>
+              <button disabled={actionBusy} onClick={() => setShowRejectBox(v => !v)}
+                className="flex-1 bg-danger text-white font-semibold py-3.5 rounded-lg disabled:opacity-60">
+                Reject
+              </button>
+            </div>
+          </>
         )}
 
         {/* Administrator and HSE Manager can reject at the first stage too, without waiting for a verifier */}

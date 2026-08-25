@@ -45,6 +45,11 @@ export interface Permit {
   crane_type: string | null;
   rated_capacity_ton: number | null;
   load_weight_ton: number | null;
+  applicable_standards: string | null;
+  equipment_used: string | null;
+  ppe_required: string | null;
+  additional_permits_required: string | null;
+  emergency_procedure: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;

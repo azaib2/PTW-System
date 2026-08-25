@@ -1,10 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/features/auth/AuthContext';
 import { createPermit, updatePermit, type CreatePermitInput } from './permitService';
-import { HOT_WORK_TYPES, CRITICAL_LIFT_QUESTIONS } from './controlDefs';
+import {
+  HOT_WORK_TYPES, CRITICAL_LIFT_QUESTIONS,
+  DEFAULT_STANDARDS_BY_TYPE, DEFAULT_EQUIPMENT_BY_TYPE, DEFAULT_PPE_BY_TYPE, DEFAULT_EMERGENCY_PROCEDURE_BY_TYPE
+} from './controlDefs';
 import type { PermitType } from '@/types';
 
 interface FormValues {
@@ -45,6 +48,11 @@ interface FormValues {
   work_leader_name: string;
   superintendent_name: string;
   no_alternative_method_confirmed: boolean;
+  applicable_standards: string;
+  equipment_used: string;
+  ppe_required: string;
+  additional_permits_required: string;
+  emergency_procedure: string;
 }
 
 function toLocalInputValue(iso: string | null): string {
@@ -70,10 +78,41 @@ export default function CreatePermitPage() {
   const [lockedInfo, setLockedInfo] = useState<{ project_name: string; contractor_name: string } | null>(null);
   const [loadingExisting, setLoadingExisting] = useState(isEditMode);
 
-  const { register, handleSubmit, watch, reset, formState: { errors } } = useForm<FormValues>({
-    defaultValues: { permit_type: initialType, location: params.get('location') ?? '' }
+  const { register, handleSubmit, watch, reset, setValue, getValues, formState: { errors } } = useForm<FormValues>({
+    defaultValues: {
+      permit_type: initialType, location: params.get('location') ?? '',
+      applicable_standards: DEFAULT_STANDARDS_BY_TYPE[initialType as keyof typeof DEFAULT_STANDARDS_BY_TYPE] ?? '',
+      equipment_used: DEFAULT_EQUIPMENT_BY_TYPE[initialType as keyof typeof DEFAULT_EQUIPMENT_BY_TYPE] ?? '',
+      ppe_required: DEFAULT_PPE_BY_TYPE[initialType as keyof typeof DEFAULT_PPE_BY_TYPE] ?? '',
+      emergency_procedure: DEFAULT_EMERGENCY_PROCEDURE_BY_TYPE[initialType as keyof typeof DEFAULT_EMERGENCY_PROCEDURE_BY_TYPE] ?? ''
+    }
   });
   const permitType = watch('permit_type');
+
+  // When creating a fresh permit (never edit mode) and the user changes
+  // permit type, refresh the reference-text defaults — but only for fields
+  // the user hasn't already typed something different into, so switching
+  // type never silently overwrites something they wrote.
+  const prevTypeRef = useRef<PermitType>(initialType);
+  useEffect(() => {
+    if (isEditMode) return;
+    if (prevTypeRef.current === permitType) return;
+    const prevType = prevTypeRef.current;
+    prevTypeRef.current = permitType;
+    const current = getValues();
+    if (!current.applicable_standards || current.applicable_standards === DEFAULT_STANDARDS_BY_TYPE[prevType as keyof typeof DEFAULT_STANDARDS_BY_TYPE]) {
+      setValue('applicable_standards', DEFAULT_STANDARDS_BY_TYPE[permitType as keyof typeof DEFAULT_STANDARDS_BY_TYPE] ?? '');
+    }
+    if (!current.equipment_used || current.equipment_used === DEFAULT_EQUIPMENT_BY_TYPE[prevType as keyof typeof DEFAULT_EQUIPMENT_BY_TYPE]) {
+      setValue('equipment_used', DEFAULT_EQUIPMENT_BY_TYPE[permitType as keyof typeof DEFAULT_EQUIPMENT_BY_TYPE] ?? '');
+    }
+    if (!current.ppe_required || current.ppe_required === DEFAULT_PPE_BY_TYPE[prevType as keyof typeof DEFAULT_PPE_BY_TYPE]) {
+      setValue('ppe_required', DEFAULT_PPE_BY_TYPE[permitType as keyof typeof DEFAULT_PPE_BY_TYPE] ?? '');
+    }
+    if (!current.emergency_procedure || current.emergency_procedure === DEFAULT_EMERGENCY_PROCEDURE_BY_TYPE[prevType as keyof typeof DEFAULT_EMERGENCY_PROCEDURE_BY_TYPE]) {
+      setValue('emergency_procedure', DEFAULT_EMERGENCY_PROCEDURE_BY_TYPE[permitType as keyof typeof DEFAULT_EMERGENCY_PROCEDURE_BY_TYPE] ?? '');
+    }
+  }, [permitType, isEditMode, getValues, setValue]);
 
   useEffect(() => {
     supabase.from('projects').select('id, project_name').then(({ data, error }) => {
@@ -136,7 +175,10 @@ export default function CreatePermitPage() {
         alternative_company_contact: data.alternative_company_contact ?? '', company_permit_issuer: data.company_permit_issuer ?? '',
         hours_of_work: data.hours_of_work ?? '', deviations_from_method_statement: data.deviations_from_method_statement ?? '',
         site_specific_hazards: data.site_specific_hazards ?? '', work_leader_name: data.work_leader_name ?? '',
-        superintendent_name: data.superintendent_name ?? '', no_alternative_method_confirmed: !!data.no_alternative_method_confirmed
+        superintendent_name: data.superintendent_name ?? '', no_alternative_method_confirmed: !!data.no_alternative_method_confirmed,
+        applicable_standards: data.applicable_standards ?? '', equipment_used: data.equipment_used ?? '',
+        ppe_required: data.ppe_required ?? '', additional_permits_required: data.additional_permits_required ?? '',
+        emergency_procedure: data.emergency_procedure ?? ''
       });
       setCriticalAnswers((data.critical_lift_answers as Record<string, boolean>) ?? {});
       setLoadingExisting(false);
@@ -182,6 +224,14 @@ export default function CreatePermitPage() {
         } : {})
       };
 
+      const templateFields = {
+        applicable_standards: values.applicable_standards || undefined,
+        equipment_used: values.equipment_used || undefined,
+        ppe_required: values.ppe_required || undefined,
+        additional_permits_required: values.additional_permits_required || undefined,
+        emergency_procedure: values.emergency_procedure || undefined
+      };
+
       if (isEditMode && editPermitId) {
         await updatePermit(editPermitId, {
           location: values.location, exact_area: values.exact_area || undefined, activity: values.activity,
@@ -189,6 +239,7 @@ export default function CreatePermitPage() {
           supervisor_name: values.supervisor_name,
           workers: values.workers ? values.workers.split(',').map(w => w.trim()).filter(Boolean) : undefined,
           start_time: new Date(values.start_time).toISOString(), expiry_time: new Date(values.expiry_time).toISOString(),
+          ...templateFields,
           ...typeSpecific
         });
         navigate(`/permits/${editPermitId}`);
@@ -209,6 +260,7 @@ export default function CreatePermitPage() {
         start_time: new Date(values.start_time).toISOString(),
         expiry_time: new Date(values.expiry_time).toISOString(),
         created_by: profile.id,
+        ...templateFields,
         ...typeSpecific
       };
       if (!input.contractor_id) throw new Error('Select a contractor.');
@@ -320,6 +372,33 @@ export default function CreatePermitPage() {
               <label className={labelClass}>Expiry Time *</label>
               <input type="datetime-local" {...register('expiry_time', { required: true })} className={inputClass} />
             </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm p-4 space-y-3">
+          <h2 className="text-sm font-semibold text-slate-700">Standards, Equipment &amp; Emergency Procedure</h2>
+          <p className="text-xs text-slate-400 -mt-2">Prefilled from the reference permit template for this work type — review and edit for the actual job.</p>
+          <div>
+            <label className={labelClass}>Applicable Standards</label>
+            <textarea {...register('applicable_standards')} className={inputClass} rows={2} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelClass}>Equipment / Tools Used</label>
+              <textarea {...register('equipment_used')} className={inputClass} rows={2} />
+            </div>
+            <div>
+              <label className={labelClass}>PPE Required</label>
+              <textarea {...register('ppe_required')} className={inputClass} rows={2} />
+            </div>
+          </div>
+          <div>
+            <label className={labelClass}>Additional Permits Required</label>
+            <input {...register('additional_permits_required')} className={inputClass} placeholder="e.g. COSHH Assessment for Welding Fume" />
+          </div>
+          <div>
+            <label className={labelClass}>Emergency Procedure</label>
+            <textarea {...register('emergency_procedure')} className={inputClass} rows={3} />
           </div>
         </div>
 

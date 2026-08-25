@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { PERMIT_PREFIX, type Permit, type PermitType } from '@/types';
-import { CONTROLS_BY_TYPE } from './controlDefs';
+import { CONTROLS_BY_TYPE, HAZARDS_BY_TYPE, PRE_AUTH_BY_TYPE } from './controlDefs';
 import { getCurrentLocation } from '@/lib/geolocation';
 import { computeCriticalLift } from './criticalLift';
 import { checkLiftingPackageComplete } from '@/features/lifting/liftingService';
@@ -49,6 +49,12 @@ export interface CreatePermitInput {
   work_leader_name?: string;
   superintendent_name?: string;
   no_alternative_method_confirmed?: boolean;
+  // Template-aligned fields — common to every permit type
+  applicable_standards?: string;
+  equipment_used?: string;
+  ppe_required?: string;
+  additional_permits_required?: string;
+  emergency_procedure?: string;
   created_by: string;
 }
 
@@ -98,11 +104,25 @@ export async function createPermit(input: CreatePermitInput) {
   if (error) throw new Error(error.message); // includes the geofence distance message from the DB trigger, if blocked
 
   // Seed the control checklist rows for this permit type so the field
-  // form has something to check against.
-  const defs = CONTROLS_BY_TYPE[input.permit_type];
-  const controlRows = defs.map(d => ({ permit_id: permit.id, control_key: d.key, control_label: d.label, is_checked: false }));
+  // form has something to check against. Includes both the working "Safety
+  // Controls" list and the "Pre-Authorisation Checks" gate (flagged), taken
+  // straight from the reference templates.
+  const controlType = input.permit_type as keyof typeof CONTROLS_BY_TYPE;
+  const defs = CONTROLS_BY_TYPE[controlType];
+  const preAuthDefs = PRE_AUTH_BY_TYPE[controlType];
+  const controlRows = [
+    ...defs.map(d => ({ permit_id: permit.id, control_key: d.key, control_label: d.label, is_checked: false, is_pre_authorization: false })),
+    ...preAuthDefs.map(d => ({ permit_id: permit.id, control_key: d.key, control_label: d.label, is_checked: false, is_pre_authorization: true }))
+  ];
   const { error: controlsError } = await supabase.from('permit_controls').insert(controlRows);
   if (controlsError) throw new Error(`Permit created but controls failed to seed: ${controlsError.message}`);
+
+  // Seed the Identified Hazards checklist — kept separate from Safety
+  // Controls per the templates (what could hurt someone vs what mitigates it).
+  const hazardDefs = HAZARDS_BY_TYPE[controlType];
+  const hazardRows = hazardDefs.map(d => ({ permit_id: permit.id, hazard_key: d.key, hazard_label: d.label, is_applicable: false }));
+  const { error: hazardsError } = await supabase.from('permit_hazards').insert(hazardRows);
+  if (hazardsError) throw new Error(`Permit created but hazards failed to seed: ${hazardsError.message}`);
 
   await logAudit('permits', permit.id, 'created', null, 'draft', null);
   return permit as Permit;
@@ -188,6 +208,11 @@ export async function approvePermit(permitId: string, userId: string, createdBy:
   const missing = findMissingMandatoryFields(permit as Permit);
   if (missing.length) throw new Error(`Cannot approve — missing required fields: ${missing.join(', ')}`);
 
+  const incompletePreAuth = await findIncompletePreAuthorization(permitId);
+  if (incompletePreAuth.length) {
+    throw new Error(`Cannot approve — pre-authorisation checks incomplete: ${incompletePreAuth.join(', ')}`);
+  }
+
   const { data: project } = await supabase.from('projects').select('geofence_enforced').eq('id', permit.project_id).maybeSingle();
   let latitude: number | undefined;
   let longitude: number | undefined;
@@ -243,6 +268,67 @@ export async function fetchPermitControls(permitId: string) {
   const { data, error } = await supabase.from('permit_controls').select('*').eq('permit_id', permitId).order('control_key');
   if (error) throw new Error(error.message);
   return data;
+}
+
+// Pure helper so the gate is unit-testable without a network round trip —
+// callers pass rows already fetched (e.g. from fetchPermitControls).
+export function allPreAuthorizationChecked(controls: { is_pre_authorization: boolean; is_checked: boolean; control_label: string }[]): boolean {
+  return controls.filter(c => c.is_pre_authorization).every(c => c.is_checked);
+}
+
+export function listIncompletePreAuthorizationLabels(controls: { is_pre_authorization: boolean; is_checked: boolean; control_label: string }[]): string[] {
+  return controls.filter(c => c.is_pre_authorization && !c.is_checked).map(c => c.control_label);
+}
+
+async function findIncompletePreAuthorization(permitId: string): Promise<string[]> {
+  const controls = await fetchPermitControls(permitId);
+  return listIncompletePreAuthorizationLabels(controls as any[]);
+}
+
+export async function fetchPermitHazards(permitId: string) {
+  const { data, error } = await supabase.from('permit_hazards').select('*').eq('permit_id', permitId).order('hazard_key');
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function updatePermitHazard(permitId: string, hazardKey: string, isApplicable: boolean, remarks?: string) {
+  const { error } = await supabase
+    .from('permit_hazards')
+    .update({ is_applicable: isApplicable, remarks })
+    .eq('permit_id', permitId)
+    .eq('hazard_key', hazardKey);
+  if (error) throw new Error(error.message);
+}
+
+// ---------------------------------------------------------------------
+// Worker Sign On / Sign Off log
+// ---------------------------------------------------------------------
+export async function fetchPermitWorkers(permitId: string) {
+  const { data, error } = await supabase.from('permit_workers').select('*').eq('permit_id', permitId).order('created_at');
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function addPermitWorker(permitId: string, input: { full_name: string; designation?: string; certifications?: string }, createdBy: string) {
+  const { error } = await supabase.from('permit_workers').insert({
+    permit_id: permitId, full_name: input.full_name, designation: input.designation || null,
+    certifications: input.certifications || null, created_by: createdBy
+  });
+  if (error) throw new Error(error.message);
+}
+
+export async function signOnWorker(workerId: string, userId: string) {
+  const { error } = await supabase.from('permit_workers')
+    .update({ signed_on_at: new Date().toISOString(), signed_on_by: userId })
+    .eq('id', workerId);
+  if (error) throw new Error(error.message);
+}
+
+export async function signOffWorker(workerId: string, userId: string) {
+  const { error } = await supabase.from('permit_workers')
+    .update({ signed_off_at: new Date().toISOString(), signed_off_by: userId })
+    .eq('id', workerId);
+  if (error) throw new Error(error.message);
 }
 
 export async function fetchPermitApprovals(permitId: string) {
