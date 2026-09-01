@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { format } from 'date-fns';
 import { useAuth } from '@/features/auth/AuthContext';
 import ReAuthModal from '@/features/auth/ReAuthModal';
-import { CAN_APPROVE, type Permit } from '@/types';
+import { CAN_APPROVE, CAN_COMPLETE, type Permit } from '@/types';
 import {
   SUSPENSION_REASONS, startPermit, suspendPermit, fetchLatestSuspension, resumePermit,
   requestExtension, fetchExtensions, decideExtension, completePermit, closePermit, cancelPermit, type ClosureChecklist
@@ -97,10 +97,14 @@ export default function FieldControlPanel({ permit, onUpdate }: { permit: Permit
           {!isAdmin && (
             <div className="text-center text-xs text-slate-400 py-1">Only an administrator can suspend or cancel a permit.</div>
           )}
-          <button disabled={busy} onClick={() => setPanel(panel === 'complete' ? 'none' : 'complete')}
-            className="w-full bg-brand text-white font-semibold py-3 rounded-lg disabled:opacity-60">
-            Complete
-          </button>
+          {CAN_COMPLETE.includes(profile.role) ? (
+            <button disabled={busy} onClick={() => setPanel(panel === 'complete' ? 'none' : 'complete')}
+              className="w-full bg-brand text-white font-semibold py-3 rounded-lg disabled:opacity-60">
+              Complete
+            </button>
+          ) : (
+            <div className="text-center text-xs text-slate-400 py-1">Only an administrator can mark this permit complete.</div>
+          )}
         </>
       )}
 

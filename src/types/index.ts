@@ -101,3 +101,9 @@ export const CAN_VERIFY: AppRole[] = CAN_APPROVE;
 export const CAN_FINAL_APPROVE: AppRole[] = ['administrator', 'permit_approver', 'hse_manager'];
 
 export const CAN_MANAGE_USERS: AppRole[] = ['administrator'];
+
+// Marking a permit COMPLETED (the "was this done per the approved plan?"
+// sign-off) is restricted to administrators only — narrower than the
+// general HSE field-control set (CAN_APPROVE) that handles Start/Suspend/
+// Resume/Extend. Mirrored server-side in the permits_update RLS policy.
+export const CAN_COMPLETE: AppRole[] = ['administrator'];
