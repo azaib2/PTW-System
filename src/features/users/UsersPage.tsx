@@ -4,22 +4,32 @@ import { useAuth } from '@/features/auth/AuthContext';
 import type { AppRole } from '@/types';
 
 interface UserRow { id: string; full_name: string; email: string; role: AppRole; contractor_id: string | null; is_active: boolean; }
+interface ContractorRow { id: string; company_name: string; status: string; }
 
 const ROLES: AppRole[] = [
   'contractor_user', 'contractor_supervisor', 'lifting_supervisor', 'hse_officer',
   'hse_manager', 'client_hse', 'permit_approver', 'administrator'
 ];
 
+// Roles that represent an internal/HSE/client/admin function rather than a
+// contractor's own staff — these normally have no company at all.
+const CONTRACTOR_ROLES: AppRole[] = ['contractor_user', 'contractor_supervisor'];
+
 export default function UsersPage() {
   const { profile } = useAuth();
   const [users, setUsers] = useState<UserRow[]>([]);
+  const [contractors, setContractors] = useState<ContractorRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
 
   async function load() {
-    const { data, error } = await supabase.from('users').select('*').order('full_name');
-    if (error) setError(error.message);
-    else setUsers(data as UserRow[]);
+    const [usersRes, contractorsRes] = await Promise.all([
+      supabase.from('users').select('*').order('full_name'),
+      supabase.from('contractors').select('id, company_name, status').order('company_name')
+    ]);
+    if (usersRes.error) setError(usersRes.error.message);
+    else setUsers(usersRes.data as UserRow[]);
+    if (!contractorsRes.error) setContractors(contractorsRes.data as ContractorRow[]);
   }
   useEffect(() => { load(); }, []);
 
@@ -32,6 +42,20 @@ export default function UsersPage() {
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to update role.');
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  async function updateContractor(id: string, contractorId: string) {
+    setSavingId(id);
+    setError(null);
+    try {
+      const { error } = await supabase.from('users').update({ contractor_id: contractorId || null }).eq('id', id);
+      if (error) throw new Error(error.message);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to update company.');
     } finally {
       setSavingId(null);
     }
@@ -80,6 +104,21 @@ export default function UsersPage() {
               className="w-full mt-2 rounded-lg border border-slate-300 px-3 py-2 text-sm">
               {ROLES.map(r => <option key={r} value={r}>{r.replace(/_/g, ' ')}</option>)}
             </select>
+
+            <label className="block mt-2">
+              <span className="text-xs text-slate-400">Company</span>
+              <select value={u.contractor_id ?? ''} disabled={savingId === u.id}
+                onChange={e => updateContractor(u.id, e.target.value)}
+                className="w-full mt-1 rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                <option value="">— No company (internal / HSE / client / admin) —</option>
+                {contractors.map(c => (
+                  <option key={c.id} value={c.id}>{c.company_name}{c.status === 'inactive' ? ' (inactive)' : ''}</option>
+                ))}
+              </select>
+              {CONTRACTOR_ROLES.includes(u.role) && !u.contractor_id && (
+                <span className="text-xs text-amber-600">A contractor-side role usually needs a company assigned.</span>
+              )}
+            </label>
           </div>
         ))}
       </div>
