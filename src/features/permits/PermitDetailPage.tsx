@@ -245,8 +245,13 @@ export default function PermitDetailPage() {
             <Link to={`/lifting/site-preparation?permitId=${permit.id}`} className="text-center text-sm bg-slate-50 hover:bg-slate-100 rounded-lg py-3 font-medium text-slate-700">Site Preparation</Link>
             <Link to={`/lifting/rigging?permitId=${permit.id}`} className="text-center text-sm bg-slate-50 hover:bg-slate-100 rounded-lg py-3 font-medium text-slate-700">Rigging Verification</Link>
             <Link to={`/lifting/competency/${permit.id}`} className="text-center text-sm bg-slate-50 hover:bg-slate-100 rounded-lg py-3 font-medium text-slate-700">Competency</Link>
-            <Link to={`/lifting/field-verification/${permit.id}`} className="text-center text-sm bg-slate-50 hover:bg-slate-100 rounded-lg py-3 font-medium text-slate-700">Field Verification</Link>
+            {CAN_VERIFY.includes(profile.role) && (
+              <Link to={`/lifting/field-verification/${permit.id}`} className="text-center text-sm bg-slate-50 hover:bg-slate-100 rounded-lg py-3 font-medium text-slate-700">Field Verification</Link>
+            )}
           </div>
+          {!CAN_VERIFY.includes(profile.role) && (
+            <p className="text-xs text-slate-400 text-center">Field Verification can only be recorded by HSE roles or an administrator.</p>
+          )}
           {fieldVerification && (
             <div className={`rounded-lg p-2.5 text-center font-bold text-sm mt-2 ${fieldVerification.ready_to_lift ? 'bg-green-50 text-success' : 'bg-red-50 text-danger'}`}>
               {fieldVerification.ready_to_lift ? '🟢 READY TO LIFT' : '🔴 NOT READY TO LIFT'}

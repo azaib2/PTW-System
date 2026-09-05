@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '@/features/auth/AuthContext';
+import { CAN_VERIFY } from '@/types';
 import { submitFieldVerification, type FieldVerificationInput } from './liftingService';
 import { uploadPhoto } from '@/features/documents/documentService';
 import CameraCapture from '@/components/CameraCapture';
@@ -28,6 +29,21 @@ export default function FieldVerificationPage() {
   const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
 
   const allOk = GATE_ITEMS.every(i => answers[i.key]);
+
+  // Defense in depth: the link to this page is already hidden from
+  // non-HSE/admin roles in PermitDetailPage, but this page is reachable by
+  // URL directly, and the database rejects the insert anyway (field
+  // verification can only ever be recorded by HSE roles or admin, never
+  // contractor staff). Block it here too with a clear message instead of
+  // letting someone fill out the whole checklist and take a photo only to
+  // hit a raw "row-level security policy" error on save.
+  if (profile && !CAN_VERIFY.includes(profile.role)) {
+    return (
+      <div className="bg-white rounded-xl shadow-sm p-6 text-sm text-slate-500">
+        Only HSE-capable roles or an administrator can record field verification.
+      </div>
+    );
+  }
 
   async function submit() {
     if (!profile || !permitId) return;
