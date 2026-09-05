@@ -90,8 +90,17 @@ export const PERMIT_TYPE_LABEL: Record<PermitType, string> = {
 
 // Role/permission matrix (mirrors the RLS policies; UI-layer convenience
 // only, never the actual security boundary).
+//
+// hse_officer is deliberately excluded here: per user request, an HSE
+// Officer can only request/submit a permit for their own company (the
+// plain contractor_id match every role gets) -- they hold none of the
+// HSE-authority actions below (verify/approve, resume, extension
+// decisions, field verification, field control). That authority starts at
+// hse_manager (scoped to their own company -- see has_hse_scope() in the
+// DB), plus lifting_supervisor, client_hse and permit_approver. Mirrored
+// server-side in is_hse_or_client().
 export const CAN_APPROVE: AppRole[] = [
-  'lifting_supervisor', 'hse_officer', 'hse_manager', 'client_hse', 'permit_approver', 'administrator'
+  'lifting_supervisor', 'hse_manager', 'client_hse', 'permit_approver', 'administrator'
 ];
 
 // Two-step approval: a broader set of HSE-capable roles can VERIFY a
