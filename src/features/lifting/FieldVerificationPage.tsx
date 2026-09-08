@@ -29,6 +29,10 @@ export default function FieldVerificationPage() {
   const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
 
   const allOk = GATE_ITEMS.every(i => answers[i.key]);
+  // Administrators are exempt from the mandatory photo (same exemption as
+  // the approve/reject/field-control actions elsewhere in the app) --
+  // everyone else who can reach this page still needs a live photo.
+  const isAdmin = profile?.role === 'administrator';
 
   // Defense in depth: the link to this page is already hidden from
   // non-HSE/admin roles in PermitDetailPage, but this page is reachable by
@@ -47,7 +51,7 @@ export default function FieldVerificationPage() {
 
   async function submit() {
     if (!profile || !permitId) return;
-    if (!photoBlob) { setError('A live photo of the field verification is required before saving.'); return; }
+    if (!photoBlob && !isAdmin) { setError('A live photo of the field verification is required before saving.'); return; }
     setSubmitting(true);
     setError(null);
     try {
@@ -61,8 +65,10 @@ export default function FieldVerificationPage() {
         verified_by: profile.id
       };
       await submitFieldVerification(input);
-      const file = new File([photoBlob], `field-verification-${Date.now()}.jpg`, { type: 'image/jpeg' });
-      await uploadPhoto({ permit_id: permitId, file, caption: 'Field verification photo evidence', related_table: 'field_verification', taken_by: profile.id });
+      if (photoBlob) {
+        const file = new File([photoBlob], `field-verification-${Date.now()}.jpg`, { type: 'image/jpeg' });
+        await uploadPhoto({ permit_id: permitId, file, caption: 'Field verification photo evidence', related_table: 'field_verification', taken_by: profile.id });
+      }
       navigate(`/permits/${permitId}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save verification.');
@@ -93,12 +99,12 @@ export default function FieldVerificationPage() {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm p-4 space-y-2">
-        <h2 className="text-sm font-semibold text-slate-700">Photo Evidence (required)</h2>
+        <h2 className="text-sm font-semibold text-slate-700">Photo Evidence {isAdmin ? '(optional for administrators)' : '(required)'}</h2>
         <CameraCapture captured={!!photoBlob} onCaptured={setPhotoBlob} onRetake={() => setPhotoBlob(null)} />
       </div>
 
       <div className="sticky bottom-16 md:bottom-0 bg-bgapp py-3 -mx-4 px-4 border-t border-slate-200">
-        <button onClick={submit} disabled={submitting || !photoBlob}
+        <button onClick={submit} disabled={submitting || (!photoBlob && !isAdmin)}
           className="w-full bg-brand text-white font-semibold py-3.5 rounded-lg disabled:opacity-60">
           {submitting ? 'Saving…' : 'Save Field Verification'}
         </button>

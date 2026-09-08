@@ -77,15 +77,19 @@ export async function generatePermitNumber(type: PermitType): Promise<string> {
   return data as string;
 }
 
-export async function createPermit(input: CreatePermitInput) {
+export async function createPermit(input: CreatePermitInput, isAdmin = false) {
   // If the project has geofencing enabled, capture the browser's current
   // location and let the database trigger enforce the distance check —
   // this can't be bypassed by disabling client JS since Postgres does the
-  // actual comparison, not this function.
+  // actual comparison, not this function. The DB trigger already exempts
+  // administrators outright (enforce_geofence_on_permit checks is_admin()),
+  // so skip the browser location prompt entirely for them too -- there's no
+  // reason to make an admin grant location permission for a check that
+  // never applies to them.
   const { data: project } = await supabase.from('projects').select('geofence_enforced').eq('id', input.project_id).maybeSingle();
   let created_latitude: number | undefined;
   let created_longitude: number | undefined;
-  if (project?.geofence_enforced) {
+  if (project?.geofence_enforced && !isAdmin) {
     const coords = await getCurrentLocation(); // throws with a clear message if denied/unavailable
     created_latitude = coords.latitude;
     created_longitude = coords.longitude;
@@ -199,7 +203,7 @@ export async function startReview(permitId: string, userId: string) {
   await logAudit('permits', permitId, 'reviewed', 'submitted', 'under_review', null);
 }
 
-export async function approvePermit(permitId: string, userId: string, createdBy: string) {
+export async function approvePermit(permitId: string, userId: string, createdBy: string, isAdmin = false) {
   if (userId === createdBy) {
     throw new Error('Self-approval is not permitted: you created this permit.');
   }
@@ -213,10 +217,13 @@ export async function approvePermit(permitId: string, userId: string, createdBy:
     throw new Error(`Cannot approve — pre-authorisation checks incomplete: ${incompletePreAuth.join(', ')}`);
   }
 
+  // Same admin exemption as createPermit -- enforce_geofence_on_approval
+  // already ignores administrators server-side, so don't make one grant
+  // location permission for a check that will never actually apply to them.
   const { data: project } = await supabase.from('projects').select('geofence_enforced').eq('id', permit.project_id).maybeSingle();
   let latitude: number | undefined;
   let longitude: number | undefined;
-  if (project?.geofence_enforced) {
+  if (project?.geofence_enforced && !isAdmin) {
     const coords = await getCurrentLocation();
     latitude = coords.latitude;
     longitude = coords.longitude;

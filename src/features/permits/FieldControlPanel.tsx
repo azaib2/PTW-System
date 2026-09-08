@@ -64,7 +64,12 @@ export default function FieldControlPanel({ permit, onUpdate }: { permit: Permit
   const pendingExtension = extensions.find(e => e.status === 'pending');
 
   function requireReauth(label: string, fn: () => Promise<void>, requirePhoto = true) {
-    setPendingAction({ label, fn, requirePhoto });
+    // Administrators keep the password re-auth step for accountability on
+    // every field-control action, but are exempt from the live-photo step
+    // (mirrors the same exemption on the permit approve/reject/verify
+    // actions in PermitDetailPage) -- applied here once so every caller
+    // (Start, Resume, Complete, Close) gets it automatically.
+    setPendingAction({ label, fn, requirePhoto: requirePhoto && !isAdmin });
   }
 
   return (

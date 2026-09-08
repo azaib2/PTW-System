@@ -265,7 +265,7 @@ export default function CreatePermitPage() {
       };
       if (!input.contractor_id) throw new Error('Select a contractor.');
 
-      const permit = await createPermit(input);
+      const permit = await createPermit(input, profile.role === 'administrator');
       navigate(`/permits/${permit.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : `Failed to ${isEditMode ? 'save' : 'create'} permit.`);

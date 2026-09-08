@@ -296,7 +296,7 @@ export default function PermitDetailPage() {
         )}
 
         {canSubmit && (
-          <button disabled={actionBusy} onClick={() => setPendingAction({ label: 'submit this permit for review', fn: () => submitPermit(permit.id, profile.id), requirePhoto: true })}
+          <button disabled={actionBusy} onClick={() => setPendingAction({ label: 'submit this permit for review', fn: () => submitPermit(permit.id, profile.id), requirePhoto: profile.role !== 'administrator' })}
             className="w-full bg-brand text-white font-semibold py-3.5 rounded-lg disabled:opacity-60">
             {['rejected', 'suspended', 'cancelled'].includes(permit.status) ? 'Resubmit for Review' : 'Submit for Review'}
           </button>
@@ -317,7 +317,7 @@ export default function PermitDetailPage() {
               </div>
             )}
             <div className="flex gap-2">
-              <button disabled={actionBusy || incompletePreAuth.length > 0} onClick={() => setPendingAction({ label: 'approve this permit', fn: () => approvePermit(permit.id, profile.id, permit.created_by), requirePhoto: true })}
+              <button disabled={actionBusy || incompletePreAuth.length > 0} onClick={() => setPendingAction({ label: 'approve this permit', fn: () => approvePermit(permit.id, profile.id, permit.created_by, profile.role === 'administrator'), requirePhoto: profile.role !== 'administrator' })}
                 className="flex-1 bg-success text-white font-semibold py-3.5 rounded-lg disabled:opacity-60">
                 Approve
               </button>
@@ -345,7 +345,7 @@ export default function PermitDetailPage() {
               onClick={() => setPendingAction({
                 label: 'reject this permit',
                 fn: () => rejectPermit(permit.id, profile.id, rejectRemarks).then(() => { setShowRejectBox(false); setRejectRemarks(''); }),
-                requirePhoto: true
+                requirePhoto: profile.role !== 'administrator'
               })}
               className="w-full bg-danger text-white font-semibold py-2.5 rounded-lg disabled:opacity-60">
               Confirm Rejection
